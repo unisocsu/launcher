@@ -20,7 +20,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 2. התקנת סביבת Java (משתמשים ב-Java 17 שהיא הדרישה של גרסאות Gradle חדשות, אך היא מקמפלת תאימות ל-Java 8 של אנדרואיד 4.4)
+    # 2. התקנת סביבת Java (מתאים ל-Java 8 של אנדרואיד 4.4)
     - name: set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -28,15 +28,22 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # 3. מתן הרשאות ריצה לקובץ ה-gradlew (הכרחי בשרתי לינוקס כדי למנוע שגיאת Permission Denied)
+    # 3. פקודת הקסם: התקנת Gradle על השרת ויצירת קובצי ה-Wrapper (gradlew) מאפס!
+    - name: Generate Gradle Wrapper
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gradle
+        gradle wrapper
+
+    # 4. מתן הרשאות ריצה לקובץ ה-gradlew שזה עתה נוצר על השרת
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 4. הרצת תהליך הקומפילציה והבנייה (מייצר קובץ APK במצב דיבאג)
+    # 5. הרצת תהליך הקומפילציה והבנייה (מייצר קובץ APK במצב דיבאג)
     - name: Build with Gradle
       run: ./gradlew assembleDebug
 
-    # 5. שמירה והעלאה של קובץ ה-APK שנוצר, כדי שתוכל להוריד אותו ישירות מהדפדפן ב-GitHub
+    # 6. שמירה והעלאה של קובץ ה-APK שנוצר, כדי שתוכל להוריד אותו ישירות מהדפדפן ב-GitHub
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
