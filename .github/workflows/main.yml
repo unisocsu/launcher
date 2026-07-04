@@ -1,26 +1,20 @@
 name: Android CI
 
-# הגדרת הטריגרים - מתי ה-Workflow ירוץ אוטומטית (בכל Push או Pull Request לענף main)
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-
-  # מאפשר לך גם להריץ את הבנייה ידנית מתוך ממשק ה-Actions ב-GitHub
   workflow_dispatch:
 
 jobs:
   build:
-    # הבנייה תתבצע על גבי שרת אובונטו עדכני
     runs-on: ubuntu-latest
 
     steps:
-    # 1. שכפול הקוד מה-Repository אל השרת של GitHub
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 2. התקנת סביבת Java (מתאים ל-Java 8 של אנדרואיד 4.4)
     - name: set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -28,22 +22,19 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # 3. פקודת הקסם: התקנת Gradle על השרת ויצירת קובצי ה-Wrapper (gradlew) מאפס!
+    # יצירת ה-Wrapper עם הגדרת גרסה מתאימה ומתקדמת אוטומטית על השרת
     - name: Generate Gradle Wrapper
       run: |
         sudo apt-get update
         sudo apt-get install -y gradle
-        gradle wrapper
+        gradle wrapper --gradle-version 7.5
 
-    # 4. מתן הרשאות ריצה לקובץ ה-gradlew שזה עתה נוצר על השרת
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    # 5. הרצת תהליך הקומפילציה והבנייה (מייצר קובץ APK במצב דיבאג)
     - name: Build with Gradle
       run: ./gradlew assembleDebug
 
-    # 6. שמירה והעלאה של קובץ ה-APK שנוצר, כדי שתוכל להוריד אותו ישירות מהדפדפן ב-GitHub
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
