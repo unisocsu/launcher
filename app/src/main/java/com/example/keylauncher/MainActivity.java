@@ -32,15 +32,11 @@ import java.util.List;
 
 public class MainActivity extends Activity {
 
-    // רכיבי ה-UI הראשיים
     private RecyclerView recyclerView;
     private LauncherAdapter adapter;
     private List<LauncherItem> launcherItems = new ArrayList<>();
-    
-    // ניהול תיקיות
     private AlertDialog openFolderDialog = null;
 
-    // ניהול ווידג'טים
     private static final int HOST_ID = 1024;
     private static final int REQUEST_PICK_WIDGET = 1;
     private static final int REQUEST_CREATE_WIDGET = 2;
@@ -48,15 +44,13 @@ public class MainActivity extends Activity {
     private AppWidgetHost widgetHost;
     private ViewGroup widgetContainer;
 
-    // --- משתני ניהול מצב הזזה / מיזוג לתיקיות ---
     private LauncherItem pendingMoveItem = null;
     private int pendingMovePosition = -1;
     private boolean isPickingDestination = false;
 
-    // מחלקות נתונים מעודכנות עם שדה type עבור ה-Gson
     public static abstract class LauncherItem {
         public String title;
-        public String type; // יישמר כ-"app" או "folder"
+        public String type; 
         public abstract boolean isFolder();
     }
 
@@ -86,27 +80,22 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // 1. אתחול ה-RecyclerView הראשי
         recyclerView = findViewById(R.id.launcher_recycler_view);
         GridLayoutManager gridLayoutManager = new GridLayoutManager(this, 4);
         recyclerView.setLayoutManager(gridLayoutManager);
 
-        // 2. אתחול מערכת הווידג'טים (מקשרים למכולה הייעודית ב-XML)
         widgetContainer = findViewById(R.id.widget_container); 
         widgetManager = AppWidgetManager.getInstance(this);
         widgetHost = new AppWidgetHost(this, HOST_ID);
         widgetHost.startListening();
 
-        // 3. טעינת נתונים: ניסיון טעינה מהדאטה, אם ריק - טוענים רשימה נקייה מהמכשיר
         if (!loadLauncherState()) {
             loadLauncherItems();
         }
 
-        // 4. חיבור ה-Adapter הראשי
         adapter = new LauncherAdapter(this, launcherItems);
         recyclerView.setAdapter(adapter);
 
-        // 5. העברת פוקוס ראשוני לרשת
         recyclerView.post(() -> {
             if (recyclerView.getChildCount() > 0) {
                 recyclerView.getChildAt(0).requestFocus();
@@ -114,9 +103,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    /**
-     * טעינת ברירת מחדל של כל האפליקציות המותקנות במכשיר
-     */
     private void loadLauncherItems() {
         launcherItems.clear();
         PackageManager pm = getPackageManager();
@@ -134,16 +120,12 @@ public class MainActivity extends Activity {
             }
         }
         
-        // יצירת תיקיית בדיקה ראשונית רק להרצה הראשונה של האפליקציה
         FolderItem testFolder = new FolderItem("מערכת וכלים");
         testFolder.appsInside.add(new AppItem("הגדרות", "com.android.settings"));
         launcherItems.add(0, testFolder); 
-        saveLauncherState(); // שמירה ראשונית
+        saveLauncherState();
     }
 
-    /**
-     * שמירת מבנה הלאנצ'ר (אפליקציות ותיקיות) ל-SharedPreferences באמצעות JSON
-     */
     private void saveLauncherState() {
         SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPreferences.edit();
@@ -155,9 +137,6 @@ public class MainActivity extends Activity {
         editor.apply();
     }
 
-    /**
-     * טעינת מבנה הלאנצ'ר מהזיכרון
-     */
     private boolean loadLauncherState() {
         SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
         String jsonText = sharedPreferences.getString("launcher_structure", null);
@@ -196,9 +175,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    /**
-     * פותח תפריט אפשרויות (Context Menu) בלחיצה ארוכה על יישום
-     */
     public void showContextMenu(View anchorView, int position) {
         PopupMenu popup = new PopupMenu(this, anchorView);
         popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
@@ -219,9 +195,6 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
-    /**
-     * מטפל בלוגיקת המיזוג או ההעברה ברגע שנבחר יעד בלחיצה רגילה
-     */
     public void handleDestinationSelected(int targetPosition) {
         if (pendingMovePosition == targetPosition) {
             cancelMoveMode();
@@ -238,14 +211,11 @@ public class MainActivity extends Activity {
 
         AppItem sourceApp = (AppItem) pendingMoveItem;
 
-        // מקרה א': היעד הוא תיקייה קיימת -> דוחפים פנימה ומסירים את המקור
         if (targetItem.isFolder()) {
             FolderItem targetFolder = (FolderItem) targetItem;
             targetFolder.appsInside.add(sourceApp);
             launcherItems.remove(pendingMovePosition);
-        } 
-        // מקרה ב': היעד הוא יישום רגיל -> מייצרים תיקייה חדשה הממזגת את שניהם
-        else {
+        } else {
             AppItem targetApp = (AppItem) targetItem;
 
             FolderItem newFolder = new FolderItem("תיקייה חדשה");
@@ -263,7 +233,7 @@ public class MainActivity extends Activity {
         }
 
         adapter.notifyDataSetChanged();
-        saveLauncherState(); // שמירה מיידית של השינוי לדאטה
+        saveLauncherState(); 
         cancelMoveMode();
         Toast.makeText(this, "העברה הושלמה בהצלחה!", Toast.LENGTH_SHORT).show();
     }
@@ -278,9 +248,6 @@ public class MainActivity extends Activity {
         return isPickingDestination;
     }
 
-    /**
-     * פונקציה לפתיחת תיקייה מותאמת למקשים
-     */
     public void openFolder(FolderItem folderItem) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_folder, null);
@@ -311,9 +278,6 @@ public class MainActivity extends Activity {
         openFolderDialog.setOnDismissListener(dialog -> openFolderDialog = null);
     }
 
-    /**
-     * ניהול לחיצות מקשים פיזיים (D-Pad / Back / ספרות בשלט)
-     */
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_9) {
@@ -341,7 +305,6 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
-    // --- ניהול ווידג'טים ---
     public void selectWidget() {
         int appWidgetId = widgetHost.allocateAppWidgetId();
         Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
