@@ -20,14 +20,16 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: 'gradle'
 
-    # יצירת ה-Wrapper עם הגדרת גרסה מתאימה ומתקדמת אוטומטית על השרת
+    # הגדרת ה-Gradle המדויק (7.5) בצורה רשמית ללא צורך בהתקנות מערכת מורכבות
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '7.5'
+
+    # כעת, כשיש Gradle 7.5 מותקן כהלכה, נחולל את קובצי ה-wrapper הנדרשים
     - name: Generate Gradle Wrapper
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gradle
-        gradle wrapper --gradle-version 7.5
+      run: gradle wrapper
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
