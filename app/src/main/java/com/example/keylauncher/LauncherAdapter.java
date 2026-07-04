@@ -34,7 +34,8 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
         
         if (item.isFolder()) {
             holder.textView.setText(item.title);
-            holder.imageView.setImageResource(android.R.drawable.ic_menu_selectable);
+            // תיקון: שימוש באייקון הבית החדש ic_launcher במקום רכיב המערכת הבעייתי
+            holder.imageView.setImageResource(R.drawable.ic_launcher);
         } else {
             MainActivity.AppItem appItem = (MainActivity.AppItem) item;
             holder.textView.setText(appItem.title);
