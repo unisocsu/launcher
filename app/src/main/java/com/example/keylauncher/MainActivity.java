@@ -84,7 +84,12 @@ public class MainActivity extends Activity {
         GridLayoutManager gridLayoutManager = new GridLayoutManager(this, 4);
         recyclerView.setLayoutManager(gridLayoutManager);
 
-        widgetContainer = findViewById(R.id.widget_container); 
+        // הגנה מפני קריסה: מחפש קודם כל את widget_container, ואם לא נמצא משתמש ב-main_root_layout
+        widgetContainer = findViewById(R.id.widget_container);
+        if (widgetContainer == null) {
+            widgetContainer = findViewById(R.id.main_root_layout);
+        }
+        
         widgetManager = AppWidgetManager.getInstance(this);
         widgetHost = new AppWidgetHost(this, HOST_ID);
         widgetHost.startListening();
@@ -334,6 +339,7 @@ public class MainActivity extends Activity {
     }
 
     private void createWidgetView(int appWidgetId, AppWidgetProviderInfo appWidgetInfo) {
+        if (widgetContainer == null) return;
         AppWidgetHostView hostView = widgetHost.createView(this, appWidgetId, appWidgetInfo);
         hostView.setAppWidget(appWidgetId, appWidgetInfo);
         hostView.setFocusable(true);
