@@ -30,12 +30,13 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        MainActivity.LauncherItem item = items[position];
+        // תיקון: שימוש ב-.get(position) עבור List במקום סוגריים מרובעים של מערך
+        MainActivity.LauncherItem item = items.get(position);
         
         if (item.isFolder()) {
             holder.textView.setText(item.title);
-            // תיקון: שימוש באייקון הבית החדש ic_launcher במקום רכיב המערכת הבעייתי
-            holder.imageView.setImageResource(R.drawable.ic_launcher);
+            // תיקון: שימוש באייקון שנמצא בתיקיית ה-mipmap (R.mipmap.ic_launcher)
+            holder.imageView.setImageResource(R.mipmap.ic_launcher);
         } else {
             MainActivity.AppItem appItem = (MainActivity.AppItem) item;
             holder.textView.setText(appItem.title);
