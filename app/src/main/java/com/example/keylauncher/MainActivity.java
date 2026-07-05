@@ -15,6 +15,7 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -80,8 +81,8 @@ public class MainActivity extends Activity {
 
     public static class FolderItem extends LauncherItem {
         public List<AppItem> appsInside = new ArrayList<>();
-        public String customIconPath = null; // נתיב תמונה מותאם אישית
-        public boolean useFirstAppIcon = false; // האם להשתמש באייקון של האפליקציה הראשונה
+        public String customIconPath = null;
+        public boolean useFirstAppIcon = false;
         
         public FolderItem(String title) {
             this.title = title;
@@ -94,8 +95,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // שימוש בטפט המערכת כרקע
-        getWindow().setBackgroundDrawableResource(android.R.drawable.screen_background_dark_transparent);
+        
+        // הגדרת שקיפות והצגת טפט ישירות מהקוד כדי לא להיות תלויים בקבצי XML של תמות
+        getWindow().setFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
+            WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
+        );
+        getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        
         setContentView(R.layout.activity_main);
 
         // א. שינוי ל-3 פריטים בשורה
@@ -112,7 +119,7 @@ public class MainActivity extends Activity {
 
         widgetContainer = findViewById(R.id.widget_container);
         if (widgetContainer == null) {
-            widgetContainer = findViewById(android.R.id.content);
+            widgetContainer = (ViewGroup) findViewById(android.R.id.content);
         }
         
         widgetManager = AppWidgetManager.getInstance(this);
@@ -382,7 +389,6 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // התחלת מעקב אחר מקש החיוג לצורך לחיצה ארוכה
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             event.startTracking();
             return true;
@@ -415,7 +421,6 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
-        // פתיחת החייגן בלחיצה ארוכה על מקש הירוק
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             try {
                 Intent dialIntent = new Intent(Intent.ACTION_DIAL);
@@ -430,7 +435,6 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        // מונע מהמערכת לבצע אירוע ברירת מחדל של לחיצה קצרה אם בוצעה לחיצה ארוכה
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             return true;
         }
