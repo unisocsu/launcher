@@ -2,6 +2,7 @@ package com.example.keylauncher;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,13 +31,33 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        // תיקון: שימוש ב-.get(position) עבור List במקום סוגריים מרובעים של מערך
         MainActivity.LauncherItem item = items.get(position);
         
         if (item.isFolder()) {
-            holder.textView.setText(item.title);
-            // תיקון: שימוש באייקון שנמצא בתיקיית ה-mipmap (R.mipmap.ic_launcher)
-            holder.imageView.setImageResource(R.mipmap.ic_launcher);
+            MainActivity.FolderItem folder = (MainActivity.FolderItem) item;
+            holder.textView.setText(folder.title);
+            
+            // ג. קביעת אייקון התיקייה על פי ההגדרות החדשות
+            if (folder.customIconPath != null) {
+                // אם נבחרה תמונה מהסייר
+                try {
+                    holder.imageView.setImageURI(Uri.parse(folder.customIconPath));
+                } catch (Exception e) {
+                    holder.imageView.setImageResource(R.mipmap.ic_launcher);
+                }
+            } else if (folder.useFirstAppIcon && !folder.appsInside.isEmpty()) {
+                // אם נבחר אייקון האפליקציה הראשונה בתיקייה
+                try {
+                    MainActivity.AppItem firstApp = folder.appsInside.get(0);
+                    holder.imageView.setImageDrawable(context.getPackageManager().getApplicationIcon(firstApp.packageName));
+                } catch (Exception e) {
+                    holder.imageView.setImageResource(R.mipmap.ic_launcher);
+                }
+            } else {
+                // ברירת מחדל
+                holder.imageView.setImageResource(R.mipmap.ic_launcher);
+            }
+            
         } else {
             MainActivity.AppItem appItem = (MainActivity.AppItem) item;
             holder.textView.setText(appItem.title);
@@ -48,7 +69,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             }
         }
 
-        // 1. האזנה ללחיצה ארוכה (Long Click) - מעבר למצב הזזה
+        // 1. האזנה ללחיצה ארוכה (Long Click)
         holder.itemView.setOnLongClickListener(v -> {
             if (context instanceof MainActivity) {
                 MainActivity mainActivity = (MainActivity) context;
@@ -60,7 +81,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             return false;
         });
 
-        // 2. טיפול בלחיצה רגילה (Enter / קצר)
+        // 2. טיפול בלחיצה רגילה
         holder.itemView.setOnClickListener(v -> {
             if (context instanceof MainActivity) {
                 MainActivity mainActivity = (MainActivity) context;
@@ -96,7 +117,6 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             imageView = itemView.findViewById(R.id.item_icon);
             textView = itemView.findViewById(R.id.item_text);
             
-            // פקודה קריטית לעבודה עם שלטים ומקשים
             itemView.setFocusable(true);
             itemView.setClickable(true);
         }
