@@ -26,8 +26,7 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProviderInfo;
 
 import com.google.gson.Gson;
-import com.google.gson.JSONArray;
-import com.google.gson.JSONObject;
+// תיקון: ה-imports הכפולים והמשובשים של GSON הוסרו מכאן
 
 import java.util.ArrayList;
 import java.util.List;
@@ -86,10 +85,10 @@ public class MainActivity extends Activity {
         GridLayoutManager gridLayoutManager = new GridLayoutManager(this, 4);
         recyclerView.setLayoutManager(gridLayoutManager);
 
-        // הגנה מפני קריסה: מחפש קודם כל את widget_container, ואם לא נמצא משתמש ב-main_root_layout
+        // הגנה מפני קריסה: מחפש קודם כל את widget_container, ואם לא נמצא משתמש ב-Root של המערכת
         widgetContainer = findViewById(R.id.widget_container);
         if (widgetContainer == null) {
-            widgetContainer = findViewById(R.id.main_root_layout);
+            widgetContainer = findViewById(android.R.id.content);
         }
         
         widgetManager = AppWidgetManager.getInstance(this);
