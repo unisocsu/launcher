@@ -8,11 +8,14 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.PopupMenu;
@@ -26,10 +29,12 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProviderInfo;
 
 import com.google.gson.Gson;
-// תיקון: ה-imports הכפולים והמשובשים של GSON הוסרו מכאן
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
@@ -38,9 +43,15 @@ public class MainActivity extends Activity {
     private List<LauncherItem> launcherItems = new ArrayList<>();
     private AlertDialog openFolderDialog = null;
 
+    private TextView dateTimeTextView;
+    private Handler timeHandler = new Handler();
+    private Runnable timeRunnable;
+
     private static final int HOST_ID = 1024;
     private static final int REQUEST_PICK_WIDGET = 1;
     private static final int REQUEST_CREATE_WIDGET = 2;
+    private static final int REQUEST_PICK_IMAGE = 3;
+    
     private AppWidgetManager widgetManager;
     private AppWidgetHost widgetHost;
     private ViewGroup widgetContainer;
@@ -48,6 +59,7 @@ public class MainActivity extends Activity {
     private LauncherItem pendingMoveItem = null;
     private int pendingMovePosition = -1;
     private boolean isPickingDestination = false;
+    private int folderPositionForIconPick = -1;
 
     public static abstract class LauncherItem {
         public String title;
@@ -68,6 +80,9 @@ public class MainActivity extends Activity {
 
     public static class FolderItem extends LauncherItem {
         public List<AppItem> appsInside = new ArrayList<>();
+        public String customIconPath = null; // נתיב תמונה מותאם אישית
+        public boolean useFirstAppIcon = false; // האם להשתמש באייקון של האפליקציה הראשונה
+        
         public FolderItem(String title) {
             this.title = title;
             this.type = "folder";
@@ -79,13 +94,23 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // שימוש בטפט המערכת כרקע
+        getWindow().setBackgroundDrawableResource(android.R.drawable.screen_background_dark_transparent);
         setContentView(R.layout.activity_main);
 
+        // א. שינוי ל-3 פריטים בשורה
         recyclerView = findViewById(R.id.launcher_recycler_view);
-        GridLayoutManager gridLayoutManager = new GridLayoutManager(this, 4);
+        GridLayoutManager gridLayoutManager = new GridLayoutManager(this, 3);
         recyclerView.setLayoutManager(gridLayoutManager);
 
-        // הגנה מפני קריסה: מחפש קודם כל את widget_container, ואם לא נמצא משתמש ב-Root של המערכת
+        // ו. הגדרת רכיב תאריך ושעה
+        dateTimeTextView = findViewById(R.id.date_time_text);
+        if (dateTimeTextView == null) {
+            // ליתר ביטחון אם לא קיים ב-XML, נחפש רכיב טקסט עליון אחר או נימנע מקריסה
+            dateTimeTextView = new TextView(this); 
+        }
+        startTimeUpdate();
+
         widgetContainer = findViewById(R.id.widget_container);
         if (widgetContainer == null) {
             widgetContainer = findViewById(android.R.id.content);
@@ -107,6 +132,24 @@ public class MainActivity extends Activity {
                 recyclerView.getChildAt(0).requestFocus();
             }
         });
+    }
+
+    private void startTimeUpdate() {
+        timeRunnable = new Runnable() {
+            @Override
+            public void run() {
+                SimpleDateFormat sdf = new SimpleDateFormat("EEEE, d MMMM yyyy • HH:mm", Locale.getDefault());
+                dateTimeTextView.setText(sdf.format(new Date()));
+                timeHandler.postDelayed(this, 1000);
+            }
+        };
+        timeHandler.post(timeRunnable);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        timeHandler.removeCallbacks(timeRunnable);
     }
 
     private void loadLauncherItems() {
@@ -132,7 +175,7 @@ public class MainActivity extends Activity {
         saveLauncherState();
     }
 
-    private void saveLauncherState() {
+    public void saveLauncherState() {
         SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         
@@ -162,6 +205,9 @@ public class MainActivity extends Activity {
                 
                 if (type.equals("folder")) {
                     FolderItem folder = new FolderItem(title);
+                    folder.customIconPath = obj.optString("customIconPath", null);
+                    folder.useFirstAppIcon = obj.optBoolean("useFirstAppIcon", false);
+                    
                     JSONArray appsArray = obj.optJSONArray("appsInside");
                     if (appsArray != null) {
                         for (int j = 0; j < appsArray.length(); j++) {
@@ -183,22 +229,73 @@ public class MainActivity extends Activity {
 
     public void showContextMenu(View anchorView, int position) {
         PopupMenu popup = new PopupMenu(this, anchorView);
-        popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
-        popup.getMenu().add(0, 2, 1, "ביטול");
+        LauncherItem selectedItem = launcherItems.get(position);
 
-        popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            @Override
-            public boolean onMenuItemClick(MenuItem item) {
-                if (item.getItemId() == 1) {
-                    pendingMoveItem = launcherItems.get(position);
-                    pendingMovePosition = position;
-                    isPickingDestination = true;
-                    Toast.makeText(MainActivity.this, "ניווט עם הפוקוס ליעד ולחץ Enter לאישור", Toast.LENGTH_LONG).show();
-                }
-                return true;
+        popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
+        
+        if (selectedItem.isFolder()) {
+            // ד. שינוי שם תיקייה ו-ג. בחירת אייקון
+            popup.getMenu().add(0, 3, 1, "שנה שם תיקייה");
+            popup.getMenu().add(0, 4, 2, "בחר אייקון מתמונה");
+            popup.getMenu().add(0, 5, 3, "השתמש באייקון האפליקציה הראשונה בתיקייה");
+        } else {
+            // ז. הסרת התקנה
+            popup.getMenu().add(0, 6, 1, "הסר התקנת אפליקציה");
+        }
+        
+        popup.getMenu().add(0, 2, 4, "ביטול");
+
+        popup.setOnMenuItemClickListener(item -> {
+            int id = item.getItemId();
+            if (id == 1) {
+                pendingMoveItem = launcherItems.get(position);
+                pendingMovePosition = position;
+                isPickingDestination = true;
+                Toast.makeText(MainActivity.this, "ניווט עם הפוקוס ליעד ולחץ Enter לאישור", Toast.LENGTH_LONG).show();
+            } else if (id == 3) {
+                showRenameFolderDialog((FolderItem) selectedItem);
+            } else if (id == 4) {
+                folderPositionForIconPick = position;
+                Intent intent = new Intent(Intent.ACTION_PICK);
+                intent.setType("image/*");
+                startActivityForResult(intent, REQUEST_PICK_IMAGE);
+            } else if (id == 5) {
+                FolderItem folder = (FolderItem) selectedItem;
+                folder.useFirstAppIcon = true;
+                folder.customIconPath = null;
+                adapter.notifyDataSetChanged();
+                saveLauncherState();
+            } else if (id == 6) {
+                AppItem appItem = (AppItem) selectedItem;
+                Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE);
+                intent.setData(Uri.parse("package:" + appItem.packageName));
+                intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+                startActivity(intent);
             }
+            return true;
         });
         popup.show();
+    }
+
+    // ד. דיאלוג שינוי שם תיקייה
+    private void showRenameFolderDialog(FolderItem folder) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("שנה שם תיקייה");
+
+        final EditText input = new EditText(this);
+        input.setText(folder.title);
+        builder.setView(input);
+
+        builder.setPositiveButton("אישור", (dialog, which) -> {
+            String newName = input.getText().toString().trim();
+            if (!newName.isEmpty()) {
+                folder.title = newName;
+                adapter.notifyDataSetChanged();
+                saveLauncherState();
+            }
+        });
+        builder.setNegativeButton("ביטול", (dialog, which) -> dialog.cancel());
+        builder.show();
     }
 
     public void handleDestinationSelected(int targetPosition) {
@@ -281,7 +378,11 @@ public class MainActivity extends Activity {
             }
         });
 
-        openFolderDialog.setOnDismissListener(dialog -> openFolderDialog = null);
+        openFolderDialog.setOnDismissListener(dialog -> {
+            openFolderDialog = null;
+            // רענון המסך הראשי בסגירת תיקייה למקרה שמשהו השתנה
+            adapter.notifyDataSetChanged(); 
+        });
     }
 
     @Override
@@ -322,8 +423,8 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK && data != null) {
-            int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
             if (requestCode == REQUEST_PICK_WIDGET) {
+                int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
                 AppWidgetProviderInfo appWidgetInfo = widgetManager.getAppWidgetInfo(appWidgetId);
                 if (appWidgetInfo.configure != null) {
                     Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE);
@@ -334,7 +435,19 @@ public class MainActivity extends Activity {
                     createWidgetView(appWidgetId, appWidgetInfo);
                 }
             } else if (requestCode == REQUEST_CREATE_WIDGET) {
+                int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
                 createWidgetView(appWidgetId, widgetManager.getAppWidgetInfo(appWidgetId));
+            } else if (requestCode == REQUEST_PICK_IMAGE && folderPositionForIconPick != -1) {
+                // ג. שמירת האייקון הנבחר מהגלריה לתיקייה
+                Uri selectedImageUri = data.getData();
+                if (selectedImageUri != null) {
+                    FolderItem folder = (FolderItem) launcherItems.get(folderPositionForIconPick);
+                    folder.customIconPath = selectedImageUri.toString();
+                    folder.useFirstAppIcon = false;
+                    adapter.notifyDataSetChanged();
+                    saveLauncherState();
+                }
+                folderPositionForIconPick = -1;
             }
         }
     }
@@ -352,5 +465,15 @@ public class MainActivity extends Activity {
     protected void onStop() {
         super.onStop();
         widgetHost.stopListening();
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // ריענון מחדש של האפליקציות במקרה שבוצעה הסרת התקנה מוצלחת
+        if (adapter != null) {
+            loadLauncherState();
+            adapter.notifyDataSetChanged();
+        }
     }
 }
