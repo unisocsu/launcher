@@ -27,24 +27,22 @@ jobs:
       with:
         gradle-version: '7.5'
 
-    # הגדרנו working-directory כדי שהפקודה תרוץ בתוך תיקיית הפרויקט האמיתית
+    # הרצה ישירות בתיקיית השורש הנוכחית שבה נמצא הפרויקט
     - name: Generate Gradle Wrapper
       run: gradle wrapper
-      working-directory: launcher
+      working-directory: .
 
-    # מתן הרשאות הרצה לקובץ שנוצר בתוך התיקייה
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-      working-directory: launcher
+      working-directory: .
 
-    # הרצת הבנייה מתוך התיקייה הנכונה
     - name: Build with Gradle
       run: ./gradlew assembleDebug
-      working-directory: launcher
+      working-directory: .
 
-    # העלאת ה-APK שנמצא כעת בתוך תיקיית launcher/app/build/...
+    # העלאת ה-APK מתיקיית ה-app הסטנדרטית
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: keylauncher-debug-apk
-        path: launcher/app/build/outputs/apk/debug/app-debug.apk
+        path: app/build/outputs/apk/debug/app-debug.apk
