@@ -37,25 +37,22 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             MainActivity.FolderItem folder = (MainActivity.FolderItem) item;
             holder.textView.setText(folder.title);
             
-            // ג. קביעת אייקון התיקייה על פי ההגדרות החדשות
+            // שימוש באייקון מערכת מובנה במקום אייקון מקומי חסר למניעת שגיאות בבנייה
             if (folder.customIconPath != null) {
-                // אם נבחרה תמונה מהסייר
                 try {
                     holder.imageView.setImageURI(Uri.parse(folder.customIconPath));
                 } catch (Exception e) {
-                    holder.imageView.setImageResource(R.mipmap.ic_launcher);
+                    holder.imageView.setImageResource(android.R.drawable.sym_def_app_icon);
                 }
             } else if (folder.useFirstAppIcon && !folder.appsInside.isEmpty()) {
-                // אם נבחר אייקון האפליקציה הראשונה בתיקייה
                 try {
                     MainActivity.AppItem firstApp = folder.appsInside.get(0);
                     holder.imageView.setImageDrawable(context.getPackageManager().getApplicationIcon(firstApp.packageName));
                 } catch (Exception e) {
-                    holder.imageView.setImageResource(R.mipmap.ic_launcher);
+                    holder.imageView.setImageResource(android.R.drawable.sym_def_app_icon);
                 }
             } else {
-                // ברירת מחדל
-                holder.imageView.setImageResource(R.mipmap.ic_launcher);
+                holder.imageView.setImageResource(android.R.drawable.sym_def_app_icon);
             }
             
         } else {
