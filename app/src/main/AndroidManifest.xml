@@ -1,34 +1,27 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.example.keylauncher">
+<activity
+    android:name=".MainActivity"
+    android:exported="true"
+    android:launchMode="singleTask"
+    android:clearTaskOnLaunch="true"
+    android:stateNotNeeded="true"
+    android:theme="@style/Theme.AppCompat.NoActionBar"> ```
 
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" 
-        tools:ignore="QueryAllPackagesPermission" />
-    <uses-permission android:name="android.permission.INTERNET" />
+---
 
-    <application
-        android:allowBackup="true"
-        android:label="Key Launcher"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.NoActionBar">
+### 2. הוסף את הגדרת הטפט והשקיפות ב-`MainActivity.java`
+פתח את `MainActivity.java`, ובתוך פונקציית `onCreate`, **מיד לאחר השורה `super.onCreate(savedInstanceState);` ולפני `setContentView`**, הוסף את השורות הבאות שמאלצות את המערכת להציג את הטפט ולהיות שקופה:
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:clearTaskOnLaunch="true"
-            android:stateNotNeeded="true"
-            android:theme="@style/Theme.AppCompat.NoActionBar.Translucent"> <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+```java
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    
+    // הגדרת חלון שקוף והצגת טפט המערכת ישירות מהקוד (עוקף את קובץ הסטיילים)
+    getWindow().setFlags(
+        android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
+        android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
+    );
+    getWindow().setBackgroundDrawableResource(android.R.color.transparent);
 
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
+    setContentView(R.layout.activity_main);
+    // ... שאר הקוד שלך ...
