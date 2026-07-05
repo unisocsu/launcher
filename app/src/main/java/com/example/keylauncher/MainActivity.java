@@ -106,7 +106,6 @@ public class MainActivity extends Activity {
         // ו. הגדרת רכיב תאריך ושעה
         dateTimeTextView = findViewById(R.id.date_time_text);
         if (dateTimeTextView == null) {
-            // ליתר ביטחון אם לא קיים ב-XML, נחפש רכיב טקסט עליון אחר או נימנע מקריסה
             dateTimeTextView = new TextView(this); 
         }
         startTimeUpdate();
@@ -234,12 +233,10 @@ public class MainActivity extends Activity {
         popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
         
         if (selectedItem.isFolder()) {
-            // ד. שינוי שם תיקייה ו-ג. בחירת אייקון
             popup.getMenu().add(0, 3, 1, "שנה שם תיקייה");
             popup.getMenu().add(0, 4, 2, "בחר אייקון מתמונה");
             popup.getMenu().add(0, 5, 3, "השתמש באייקון האפליקציה הראשונה בתיקייה");
         } else {
-            // ז. הסרת התקנה
             popup.getMenu().add(0, 6, 1, "הסר התקנת אפליקציה");
         }
         
@@ -277,7 +274,6 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
-    // ד. דיאלוג שינוי שם תיקייה
     private void showRenameFolderDialog(FolderItem folder) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("שנה שם תיקייה");
@@ -380,13 +376,18 @@ public class MainActivity extends Activity {
 
         openFolderDialog.setOnDismissListener(dialog -> {
             openFolderDialog = null;
-            // רענון המסך הראשי בסגירת תיקייה למקרה שמשהו השתנה
             adapter.notifyDataSetChanged(); 
         });
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        // התחלת מעקב אחר מקש החיוג לצורך לחיצה ארוכה
+        if (keyCode == KeyEvent.KEYCODE_CALL) {
+            event.startTracking();
+            return true;
+        }
+
         if (keyCode == KeyEvent.KEYCODE_9) {
             selectWidget();
             return true;
@@ -410,6 +411,30 @@ public class MainActivity extends Activity {
             return true; 
         }
         return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyLongPress(int keyCode, KeyEvent event) {
+        // פתיחת החייגן בלחיצה ארוכה על מקש הירוק
+        if (keyCode == KeyEvent.KEYCODE_CALL) {
+            try {
+                Intent dialIntent = new Intent(Intent.ACTION_DIAL);
+                startActivity(dialIntent);
+            } catch (Exception e) {
+                Toast.makeText(this, "לא נמצאה אפליקציית חייגן במכשיר", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        }
+        return super.onKeyLongPress(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        // מונע מהמערכת לבצע אירוע ברירת מחדל של לחיצה קצרה אם בוצעה לחיצה ארוכה
+        if (keyCode == KeyEvent.KEYCODE_CALL) {
+            return true;
+        }
+        return super.onKeyUp(keyCode, event);
     }
 
     public void selectWidget() {
@@ -438,7 +463,6 @@ public class MainActivity extends Activity {
                 int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
                 createWidgetView(appWidgetId, widgetManager.getAppWidgetInfo(appWidgetId));
             } else if (requestCode == REQUEST_PICK_IMAGE && folderPositionForIconPick != -1) {
-                // ג. שמירת האייקון הנבחר מהגלריה לתיקייה
                 Uri selectedImageUri = data.getData();
                 if (selectedImageUri != null) {
                     FolderItem folder = (FolderItem) launcherItems.get(folderPositionForIconPick);
@@ -470,7 +494,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // ריענון מחדש של האפליקציות במקרה שבוצעה הסרת התקנה מוצלחת
         if (adapter != null) {
             loadLauncherState();
             adapter.notifyDataSetChanged();
