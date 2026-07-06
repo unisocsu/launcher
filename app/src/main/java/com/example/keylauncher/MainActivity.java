@@ -20,7 +20,6 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.PopupMenu;
-import android.view.MenuItem;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -43,6 +42,7 @@ public class MainActivity extends Activity {
     private LauncherAdapter adapter;
     private List<LauncherItem> launcherItems = new ArrayList<>();
     private AlertDialog openFolderDialog = null;
+    private FolderItem currentlyOpenFolderItem = null; // משתנה חדש לשמירת התיקייה הפתוחה כרגע
 
     private TextView dateTimeTextView;
     private Handler timeHandler = new Handler();
@@ -96,7 +96,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // הגגרת שקיפות והצגת טפט ישירות מהקוד
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
             WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
@@ -115,7 +114,6 @@ public class MainActivity extends Activity {
         }
         startTimeUpdate();
 
-        // הגנה מפני קריסות מזהה ה-Layout
         widgetContainer = findViewById(R.id.widget_container);
         if (widgetContainer == null) {
             widgetContainer = (ViewGroup) findViewById(android.R.id.content);
@@ -232,11 +230,22 @@ public class MainActivity extends Activity {
         }
     }
 
+    // פונקציית התפריט המעודכנת שמבדילה בין לחיצה במסך הראשי ללחיצה בתוך תיקייה
     public void showContextMenu(View anchorView, int position) {
         PopupMenu popup = new PopupMenu(this, anchorView);
-        LauncherItem selectedItem = launcherItems.get(position);
+        LauncherItem selectedItem;
+        boolean isInFolder = (openFolderDialog != null && openFolderDialog.isShowing() && currentlyOpenFolderItem != null);
 
-        popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
+        // שליפת הפריט הנכון בהתאם למיקום הלחיצה (בתוך התיקייה או במסך הראשי)
+        if (isInFolder) {
+            selectedItem = currentlyOpenFolderItem.appsInside.get(position);
+        } else {
+            selectedItem = launcherItems.get(position);
+        }
+
+        if (!isInFolder) {
+            popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
+        }
         
         if (selectedItem.isFolder()) {
             popup.getMenu().add(0, 3, 1, "שנה שם תיקייה");
@@ -244,9 +253,7 @@ public class MainActivity extends Activity {
             popup.getMenu().add(0, 5, 3, "השתמש באייקון האפליקציה הראשונה בתיקייה");
         } else {
             popup.getMenu().add(0, 6, 1, "הסר התקנת אפליקציה");
-            
-            // בדיקה אם הדיאלוג של התיקייה פתוח כרגע - אם כן, האפליקציה הזו מוצגת בתוך תיקייה
-            if (openFolderDialog != null && openFolderDialog.isShowing()) {
+            if (isInFolder) {
                 popup.getMenu().add(0, 7, 2, "הסר מתיקייה");
             }
         }
@@ -280,30 +287,21 @@ public class MainActivity extends Activity {
                 intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
                 startActivity(intent);
             } else if (id == 7) {
-                // לוגיקת הסרה מתיקייה והחזרה למסך הראשי
+                // לוגיקת הסרה מדויקת מתוך התיקייה שנשמרה במשתנה
                 AppItem appToExtract = (AppItem) selectedItem;
                 
-                // 1. הוספת האפליקציה חזרה לרשימת המסך הראשי
+                // 1. החזרה למסך הראשי
                 launcherItems.add(appToExtract);
                 
-                // 2. איתור התיקייה שממנה לחצו והסרת האפליקציה מתוכה
-                for (int i = 0; i < launcherItems.size(); i++) {
-                    LauncherItem mainItem = launcherItems.get(i);
-                    if (mainItem.isFolder()) {
-                        FolderItem folder = (FolderItem) mainItem;
-                        if (folder.appsInside.contains(appToExtract)) {
-                            folder.appsInside.remove(appToExtract);
-                            
-                            // אם התיקייה התרוקנה לחלוטין, נסיר גם אותה מהמסך הראשי
-                            if (folder.appsInside.isEmpty()) {
-                                launcherItems.remove(i);
-                            }
-                            break;
-                        }
-                    }
+                // 2. הסרה מתוך התיקייה הנוכחית
+                currentlyOpenFolderItem.appsInside.remove(appToExtract);
+                
+                // 3. אם התיקייה ריקה - נמחק אותה מהמסך הראשי
+                if (currentlyOpenFolderItem.appsInside.isEmpty()) {
+                    launcherItems.remove(currentlyOpenFolderItem);
                 }
                 
-                // 3. סגירת הדיאלוג הפתוח, רענון האדפטרים ושמירת המצב
+                // 4. סגירה ורענון של הכל
                 if (openFolderDialog != null) {
                     openFolderDialog.dismiss();
                 }
@@ -390,6 +388,8 @@ public class MainActivity extends Activity {
     }
 
     public void openFolder(FolderItem folderItem) {
+        currentlyOpenFolderItem = folderItem; // שמירת המצביע לתיקייה הנוכחית שנפתחה
+        
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_folder, null);
         builder.setView(dialogView);
@@ -418,7 +418,8 @@ public class MainActivity extends Activity {
 
         openFolderDialog.setOnDismissListener(dialog -> {
             openFolderDialog = null;
-            loadLauncherState(); // רענון המבנה העדכני למקרה שפריט הוצא מהתיקייה
+            currentlyOpenFolderItem = null; // איפוס המצביע ביציאה מהתיקייה
+            loadLauncherState();
             adapter.notifyDataSetChanged(); 
         });
     }
@@ -474,7 +475,7 @@ public class MainActivity extends Activity {
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             return true;
         }
-        return super.onKeyUp(keyCode, event);
+        return super.super.onKeyUp(keyCode, event);
     }
 
     public void selectWidget() {
