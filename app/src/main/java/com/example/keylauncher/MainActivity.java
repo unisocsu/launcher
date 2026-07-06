@@ -96,7 +96,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // הגדרת שקיפות והצגת טפט ישירות מהקוד
+        // הגגרת שקיפות והצגת טפט ישירות מהקוד
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
             WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
@@ -244,6 +244,11 @@ public class MainActivity extends Activity {
             popup.getMenu().add(0, 5, 3, "השתמש באייקון האפליקציה הראשונה בתיקייה");
         } else {
             popup.getMenu().add(0, 6, 1, "הסר התקנת אפליקציה");
+            
+            // בדיקה אם הדיאלוג של התיקייה פתוח כרגע - אם כן, האפליקציה הזו מוצגת בתוך תיקייה
+            if (openFolderDialog != null && openFolderDialog.isShowing()) {
+                popup.getMenu().add(0, 7, 2, "הסר מתיקייה");
+            }
         }
         
         popup.getMenu().add(0, 2, 4, "ביטול");
@@ -274,6 +279,37 @@ public class MainActivity extends Activity {
                 intent.setData(Uri.parse("package:" + appItem.packageName));
                 intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
                 startActivity(intent);
+            } else if (id == 7) {
+                // לוגיקת הסרה מתיקייה והחזרה למסך הראשי
+                AppItem appToExtract = (AppItem) selectedItem;
+                
+                // 1. הוספת האפליקציה חזרה לרשימת המסך הראשי
+                launcherItems.add(appToExtract);
+                
+                // 2. איתור התיקייה שממנה לחצו והסרת האפליקציה מתוכה
+                for (int i = 0; i < launcherItems.size(); i++) {
+                    LauncherItem mainItem = launcherItems.get(i);
+                    if (mainItem.isFolder()) {
+                        FolderItem folder = (FolderItem) mainItem;
+                        if (folder.appsInside.contains(appToExtract)) {
+                            folder.appsInside.remove(appToExtract);
+                            
+                            // אם התיקייה התרוקנה לחלוטין, נסיר גם אותה מהמסך הראשי
+                            if (folder.appsInside.isEmpty()) {
+                                launcherItems.remove(i);
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                // 3. סגירת הדיאלוג הפתוח, רענון האדפטרים ושמירת המצב
+                if (openFolderDialog != null) {
+                    openFolderDialog.dismiss();
+                }
+                adapter.notifyDataSetChanged();
+                saveLauncherState();
+                Toast.makeText(this, "האפליקציה הועברה למסך הראשי", Toast.LENGTH_SHORT).show();
             }
             return true;
         });
@@ -382,6 +418,7 @@ public class MainActivity extends Activity {
 
         openFolderDialog.setOnDismissListener(dialog -> {
             openFolderDialog = null;
+            loadLauncherState(); // רענון המבנה העדכני למקרה שפריט הוצא מהתיקייה
             adapter.notifyDataSetChanged(); 
         });
     }
