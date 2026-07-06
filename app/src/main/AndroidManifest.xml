@@ -1,27 +1,30 @@
-<activity
-    android:name=".MainActivity"
-    android:exported="true"
-    android:launchMode="singleTask"
-    android:clearTaskOnLaunch="true"
-    android:stateNotNeeded="true"
-    android:theme="@style/Theme.AppCompat.NoActionBar"> ```
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.keylauncher">
 
----
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <uses-permission android:name="android.permission.BIND_APPWIDGET" />
 
-### 2. הוסף את הגדרת הטפט והשקיפות ב-`MainActivity.java`
-פתח את `MainActivity.java`, ובתוך פונקציית `onCreate`, **מיד לאחר השורה `super.onCreate(savedInstanceState);` ולפני `setContentView`**, הוסף את השורות הבאות שמאלצות את המערכת להציג את הטפט ולהיות שקופה:
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.AppCompat.NoActionBar">
 
-```java
-@Override
-protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    
-    // הגדרת חלון שקוף והצגת טפט המערכת ישירות מהקוד (עוקף את קובץ הסטיילים)
-    getWindow().setFlags(
-        android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
-        android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
-    );
-    getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:clearTaskOnLaunch="true"
+            android:stateNotNeeded="true">
+            
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
-    setContentView(R.layout.activity_main);
-    // ... שאר הקוד שלך ...
+    </application>
+</manifest>
