@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
     private LauncherAdapter adapter;
     private List<LauncherItem> launcherItems = new ArrayList<>();
     private AlertDialog openFolderDialog = null;
-    private FolderItem currentlyOpenFolderItem = null; // משתנה חדש לשמירת התיקייה הפתוחה כרגע
+    private FolderItem currentlyOpenFolderItem = null; 
 
     private TextView dateTimeTextView;
     private Handler timeHandler = new Handler();
@@ -230,13 +230,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    // פונקציית התפריט המעודכנת שמבדילה בין לחיצה במסך הראשי ללחיצה בתוך תיקייה
     public void showContextMenu(View anchorView, int position) {
         PopupMenu popup = new PopupMenu(this, anchorView);
         LauncherItem selectedItem;
         boolean isInFolder = (openFolderDialog != null && openFolderDialog.isShowing() && currentlyOpenFolderItem != null);
 
-        // שליפת הפריט הנכון בהתאם למיקום הלחיצה (בתוך התיקייה או במסך הראשי)
         if (isInFolder) {
             selectedItem = currentlyOpenFolderItem.appsInside.get(position);
         } else {
@@ -287,21 +285,15 @@ public class MainActivity extends Activity {
                 intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
                 startActivity(intent);
             } else if (id == 7) {
-                // לוגיקת הסרה מדויקת מתוך התיקייה שנשמרה במשתנה
                 AppItem appToExtract = (AppItem) selectedItem;
                 
-                // 1. החזרה למסך הראשי
                 launcherItems.add(appToExtract);
-                
-                // 2. הסרה מתוך התיקייה הנוכחית
                 currentlyOpenFolderItem.appsInside.remove(appToExtract);
                 
-                // 3. אם התיקייה ריקה - נמחק אותה מהמסך הראשי
                 if (currentlyOpenFolderItem.appsInside.isEmpty()) {
                     launcherItems.remove(currentlyOpenFolderItem);
                 }
                 
-                // 4. סגירה ורענון של הכל
                 if (openFolderDialog != null) {
                     openFolderDialog.dismiss();
                 }
@@ -388,7 +380,7 @@ public class MainActivity extends Activity {
     }
 
     public void openFolder(FolderItem folderItem) {
-        currentlyOpenFolderItem = folderItem; // שמירת המצביע לתיקייה הנוכחית שנפתחה
+        currentlyOpenFolderItem = folderItem; 
         
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_folder, null);
@@ -418,7 +410,7 @@ public class MainActivity extends Activity {
 
         openFolderDialog.setOnDismissListener(dialog -> {
             openFolderDialog = null;
-            currentlyOpenFolderItem = null; // איפוס המצביע ביציאה מהתיקייה
+            currentlyOpenFolderItem = null; 
             loadLauncherState();
             adapter.notifyDataSetChanged(); 
         });
@@ -463,7 +455,7 @@ public class MainActivity extends Activity {
                 Intent dialIntent = new Intent(Intent.ACTION_DIAL);
                 startActivity(dialIntent);
             } catch (Exception e) {
-                Toast.makeText(this, "לא נמצאה אפליקציית חייגן במכשיר", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "לאמצאה אפליקציית חייגן במכשיר", Toast.LENGTH_SHORT).show();
             }
             return true;
         }
@@ -475,7 +467,8 @@ public class MainActivity extends Activity {
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             return true;
         }
-        return super.super.onKeyUp(keyCode, event);
+        // תוקן כאן מ-super.super ל-super תקני
+        return super.onKeyUp(keyCode, event);
     }
 
     public void selectWidget() {
