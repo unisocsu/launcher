@@ -96,7 +96,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // הגדרת שקיפות והצגת טפט ישירות מהקוד כדי לא להיות תלויים בקבצי XML של תמות
+        // הגדרת שקיפות והצגת טפט ישירות מהקוד
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
             WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
@@ -105,18 +105,17 @@ public class MainActivity extends Activity {
         
         setContentView(R.layout.activity_main);
 
-        // א. שינוי ל-3 פריטים בשורה
         recyclerView = findViewById(R.id.launcher_recycler_view);
         GridLayoutManager gridLayoutManager = new GridLayoutManager(this, 3);
         recyclerView.setLayoutManager(gridLayoutManager);
 
-        // ו. הגדרת רכיב תאריך ושעה
         dateTimeTextView = findViewById(R.id.date_time_text);
         if (dateTimeTextView == null) {
             dateTimeTextView = new TextView(this); 
         }
         startTimeUpdate();
 
+        // הגנה מפני קריסות מזהה ה-Layout
         widgetContainer = findViewById(R.id.widget_container);
         if (widgetContainer == null) {
             widgetContainer = (ViewGroup) findViewById(android.R.id.content);
