@@ -33,8 +33,10 @@ import com.google.gson.Gson;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class MainActivity extends Activity {
 
@@ -60,6 +62,7 @@ public class MainActivity extends Activity {
     private LauncherItem pendingMoveItem = null;
     private int pendingMovePosition = -1;
     private boolean isPickingDestination = false;
+    private boolean isCopyOperation = false; // משתנה חדש לבדיקה האם זו העתקה או העברה
     private int folderPositionForIconPick = -1;
 
     public static abstract class LauncherItem {
@@ -123,8 +126,11 @@ public class MainActivity extends Activity {
         widgetHost = new AppWidgetHost(this, HOST_ID);
         widgetHost.startListening();
 
+        // טעינה וסנכרון חכם מול המכשיר בכל הפעלה
         if (!loadLauncherState()) {
             loadLauncherItems();
+        } else {
+            syncAndCleanLauncherItems(); 
         }
 
         adapter = new LauncherAdapter(this, launcherItems);
@@ -175,6 +181,61 @@ public class MainActivity extends Activity {
         FolderItem testFolder = new FolderItem("מערכת וכלים");
         testFolder.appsInside.add(new AppItem("הגדרות", "com.android.settings"));
         launcherItems.add(0, testFolder); 
+        saveLauncherState();
+    }
+
+    // פונקציה חדשה: סורקת את המכשיר, מוחקת יישומים שלא קיימים ומוסיפה יישומים חדשים
+    private void syncAndCleanLauncherItems() {
+        PackageManager pm = getPackageManager();
+        
+        // 1. השגת כל האפליקציות שבאמת מותקנות כרגע במכשיר
+        Intent intent = new Intent(Intent.ACTION_MAIN, null);
+        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> availableActivities = pm.queryIntentActivities(intent, 0);
+        
+        Set<String> installedPackages = new HashSet<>();
+        for (ResolveInfo ri : availableActivities) {
+            installedPackages.add(ri.activityInfo.packageName);
+        }
+
+        // 2. ניקוי אפליקציות שכבר לא קיימות מהמסך הראשי ומתוך תיקיות
+        List<LauncherItem> itemsToRemove = new ArrayList<>();
+        Set<String> currentlyDisplayedPackages = new HashSet<>();
+
+        for (LauncherItem item : launcherItems) {
+            if (item.isFolder()) {
+                FolderItem folder = (FolderItem) item;
+                List<AppItem> appsInsideToRemove = new ArrayList<>();
+                for (AppItem app : folder.appsInside) {
+                    if (!installedPackages.contains(app.packageName)) {
+                        appsInsideToRemove.add(app);
+                    } else {
+                        currentlyDisplayedPackages.add(app.packageName);
+                    }
+                }
+                folder.appsInside.removeAll(appsInsideToRemove);
+                if (folder.appsInside.isEmpty() && folder.customIconPath == null) {
+                    itemsToRemove.add(folder);
+                }
+            } else {
+                AppItem app = (AppItem) item;
+                if (!installedPackages.contains(app.packageName)) {
+                    itemsToRemove.add(app);
+                } else {
+                    currentlyDisplayedPackages.add(app.packageName);
+                }
+            }
+        }
+        launcherItems.removeAll(itemsToRemove);
+
+        // 3. אופציונלי: הוספת אפליקציות חדשות שהותקנו לאחרונה לסוף הרשימה
+        for (ResolveInfo ri : availableActivities) {
+            String pkg = ri.activityInfo.packageName;
+            if (!pkg.equals(getPackageName()) && !currentlyDisplayedPackages.contains(pkg)) {
+                String label = ri.loadLabel(pm).toString();
+                launcherItems.add(new AppItem(label, pkg));
+            }
+        }
         saveLauncherState();
     }
 
@@ -243,6 +304,9 @@ public class MainActivity extends Activity {
 
         if (!isInFolder) {
             popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
+            if (!selectedItem.isFolder()) {
+                popup.getMenu().add(0, 8, 0, "העתק / שכפל למיקום אחר"); // פריט חדש בשביל העתקה
+            }
         }
         
         if (selectedItem.isFolder()) {
@@ -264,7 +328,14 @@ public class MainActivity extends Activity {
                 pendingMoveItem = launcherItems.get(position);
                 pendingMovePosition = position;
                 isPickingDestination = true;
-                Toast.makeText(MainActivity.this, "ניווט עם הפוקוס ליעד ולחץ Enter לאישור", Toast.LENGTH_LONG).show();
+                isCopyOperation = false; // מצב העברה רגיל
+                Toast.makeText(MainActivity.this, "בחר יעד ולחץ לאישור המיזוג/העברה", Toast.LENGTH_LONG).show();
+            } else if (id == 8) {
+                pendingMoveItem = launcherItems.get(position);
+                pendingMovePosition = position;
+                isPickingDestination = true;
+                isCopyOperation = true; // הפעלת מצב העתקה!
+                Toast.makeText(MainActivity.this, "בחר תיקייה או אפליקציה שאליה תרצה לשכפל", Toast.LENGTH_LONG).show();
             } else if (id == 3) {
                 showRenameFolderDialog((FolderItem) selectedItem);
             } else if (id == 4) {
@@ -286,7 +357,6 @@ public class MainActivity extends Activity {
                 startActivity(intent);
             } else if (id == 7) {
                 AppItem appToExtract = (AppItem) selectedItem;
-                
                 launcherItems.add(appToExtract);
                 currentlyOpenFolderItem.appsInside.remove(appToExtract);
                 
@@ -327,7 +397,7 @@ public class MainActivity extends Activity {
     }
 
     public void handleDestinationSelected(int targetPosition) {
-        if (pendingMovePosition == targetPosition) {
+        if (!isCopyOperation && pendingMovePosition == targetPosition) {
             cancelMoveMode();
             return;
         }
@@ -335,42 +405,50 @@ public class MainActivity extends Activity {
         LauncherItem targetItem = launcherItems.get(targetPosition);
 
         if (pendingMoveItem.isFolder()) {
-            Toast.makeText(this, "לא ניתן להעביר תיקייה שלמה", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "לא ניתן להעתיק או להעביר תיקייה שלמה", Toast.LENGTH_SHORT).show();
             cancelMoveMode();
             return;
         }
 
         AppItem sourceApp = (AppItem) pendingMoveItem;
+        // יצירת עותק נקי בשביל פעולת ההעתקה
+        AppItem appToPlace = isCopyOperation ? new AppItem(sourceApp.title, sourceApp.packageName) : sourceApp;
 
         if (targetItem.isFolder()) {
             FolderItem targetFolder = (FolderItem) targetItem;
-            targetFolder.appsInside.add(sourceApp);
-            launcherItems.remove(pendingMovePosition);
+            targetFolder.appsInside.add(appToPlace);
+            
+            if (!isCopyOperation) {
+                launcherItems.remove(pendingMovePosition);
+            }
         } else {
             AppItem targetApp = (AppItem) targetItem;
 
             FolderItem newFolder = new FolderItem("תיקייה חדשה");
             newFolder.appsInside.add(targetApp);
-            newFolder.appsInside.add(sourceApp);
+            newFolder.appsInside.add(appToPlace);
 
-            launcherItems.remove(pendingMovePosition);
-            
-            int actualTargetPosition = targetPosition;
-            if (pendingMovePosition < targetPosition) {
-                actualTargetPosition--;
+            if (!isCopyOperation) {
+                launcherItems.remove(pendingMovePosition);
+                int actualTargetPosition = targetPosition;
+                if (pendingMovePosition < targetPosition) {
+                    actualTargetPosition--;
+                }
+                launcherItems.set(actualTargetPosition, newFolder);
+            } else {
+                launcherItems.set(targetPosition, newFolder);
             }
-            
-            launcherItems.set(actualTargetPosition, newFolder);
         }
 
         adapter.notifyDataSetChanged();
         saveLauncherState(); 
         cancelMoveMode();
-        Toast.makeText(this, "העברה הושלמה בהצלחה!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, isCopyOperation ? "האפליקציה שוכפלה בהצלחה!" : "העברה הושלמה בהצלחה!", Toast.LENGTH_SHORT).show();
     }
 
     public void cancelMoveMode() {
         isPickingDestination = false;
+        isCopyOperation = false;
         pendingMoveItem = null;
         pendingMovePosition = -1;
     }
@@ -411,7 +489,7 @@ public class MainActivity extends Activity {
         openFolderDialog.setOnDismissListener(dialog -> {
             openFolderDialog = null;
             currentlyOpenFolderItem = null; 
-            loadLauncherState();
+            syncAndCleanLauncherItems(); // סנכרון חלון התיקייה בסגירה
             adapter.notifyDataSetChanged(); 
         });
     }
@@ -431,7 +509,7 @@ public class MainActivity extends Activity {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (isPickingDestination) {
                 cancelMoveMode();
-                Toast.makeText(this, "מצב העברה בוטל", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "מצב עריכה בוטל", Toast.LENGTH_SHORT).show();
                 return true;
             }
             if (openFolderDialog != null && openFolderDialog.isShowing()) {
@@ -455,7 +533,7 @@ public class MainActivity extends Activity {
                 Intent dialIntent = new Intent(Intent.ACTION_DIAL);
                 startActivity(dialIntent);
             } catch (Exception e) {
-                Toast.makeText(this, "לאמצאה אפליקציית חייגן במכשיר", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "לא נמצאה אפליקציית חייגן במכשיר", Toast.LENGTH_SHORT).show();
             }
             return true;
         }
@@ -467,7 +545,6 @@ public class MainActivity extends Activity {
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             return true;
         }
-        // תוקן כאן מ-super.super ל-super תקני
         return super.onKeyUp(keyCode, event);
     }
 
@@ -529,7 +606,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (adapter != null) {
-            loadLauncherState();
+            syncAndCleanLauncherItems(); // סנכרון חם גם כשחוזרים מאפליקציה אחרת
             adapter.notifyDataSetChanged();
         }
     }
