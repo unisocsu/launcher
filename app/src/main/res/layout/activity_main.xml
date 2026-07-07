@@ -3,127 +3,41 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#1A1224"
+    android:background="@android:color/transparent"
     android:padding="12dp">
 
     <TextView
-        android:id="@+id/tvCurrentPath"
+        android:id="@+id/date_time_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp"
+        android:textColor="#FFFFFF"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:shadowColor="#000000"
+        android:shadowDx="2"
+        android:shadowDy="2"
+        android:shadowRadius="4" />
+
+    <LinearLayout
+        android:id="@+id/widget_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Path: /"
-        android:textColor="#E0AAFF"
-        android:fontFamily="monospace"
-        android:textSize="14sp"
-        android:padding="8dp"
-        android:background="#2D1F3D" />
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingBottom="8dp"
+        android:minHeight="80dp" />
 
-    <RelativeLayout
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/launcher_recycler_view"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="#241933"
-        android:layout_marginTop="10dp"
-        android:padding="6dp">
-
-        <ListView
-            android:id="@+id/fileListView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:divider="#3C2A54"
-            android:dividerHeight="1dp" />
-
-        <GridView
-            android:id="@+id/fileGridView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:numColumns="3"
-            android:horizontalSpacing="8dp"
-            android:verticalSpacing="8dp"
-            android:visibility="gone" />
-    </RelativeLayout>
-
-    <LinearLayout
-        android:id="@+id/terminalContainer"
-        android:layout_width="match_parent"
-        android:layout_height="160dp"
-        android:orientation="vertical"
-        android:background="#0D0814"
-        android:layout_marginTop="10dp"
-        android:padding="6dp"
-        android:visibility="gone">
-
-        <ScrollView
-            android:id="@+id/terminalScrollView"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1">
-
-            <TextView
-                android:id="@+id/tvTerminalOutput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="#00FF00"
-                android:fontFamily="monospace"
-                android:textSize="12sp" />
-        </ScrollView>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="4dp">
-
-            <EditText
-                android:id="@+id/etTerminalInput"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="קלט לסקריפט (scanf)..."
-                android:textColor="#FFFFFF"
-                android:textColorHint="#555555"
-                android:fontFamily="monospace"
-                android:textSize="13sp"
-                android:background="#1F162E"
-                android:padding="8dp" />
-
-            <Button
-                android:id="@+id/btnTerminalSend"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="שלח"
-                android:textSize="12sp"
-                android:textColor="#FFFFFF"
-                android:background="#5A189A" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="10dp">
-
-        <Button
-            android:id="@+id/btnToggleView"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="תצוגת רשת (Grid)"
-            android:textColor="#FFFFFF"
-            android:background="#2D1F3D" />
-
-        <View
-            android:layout_width="8dp"
-            android:layout_height="match_parent" />
-
-        <Button
-            android:id="@+id/btnTerminalSettings"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="הגדרות צבעים"
-            android:textColor="#FFFFFF"
-            android:background="#2D1F3D" />
-    </LinearLayout>
+        android:clipToPadding="false"
+        android:scrollbars="vertical"
+        android:focusable="true"
+        android:clickable="true" />
 
 </LinearLayout>
