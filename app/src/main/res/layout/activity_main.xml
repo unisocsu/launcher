@@ -4,17 +4,18 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@android:color/transparent"
-    android:padding="12dp">
-
-    <TextView
+    android:paddingLeft="12dp"
+    android:paddingRight="12dp"
+    android:paddingBottom="12dp"
+    android:paddingTop="4dp"> <TextView
         android:id="@+id/date_time_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
-        android:paddingTop="4dp"
-        android:paddingBottom="8dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="4dp"
         android:textColor="#FFFFFF"
-        android:textSize="22sp"
+        android:textSize="20sp"
         android:textStyle="bold"
         android:shadowColor="#000000"
         android:shadowDx="2"
@@ -27,8 +28,8 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center"
-        android:paddingBottom="8dp"
-        android:minHeight="80dp" />
+        android:paddingBottom="4dp"
+        android:minHeight="60dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/launcher_recycler_view"
