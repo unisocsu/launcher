@@ -66,7 +66,9 @@ public class MainActivity extends Activity {
 
     private boolean isVirtualMouseActive = false;
     private int currentWidgetId = -1;
-    private Map<Integer, String> shortcutKeysMap = new HashMap<>();
+    
+    // שינוי ג': מפת מקשי הקיצור מבוססת כעת על מיקום (Position) במסך
+    private Map<Integer, Integer> shortcutPositionsMap = new HashMap<>();
 
     public static abstract class LauncherItem {
         public String title;
@@ -103,13 +105,25 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
-            WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
-        );
+        try {
+            getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
+                WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
+            );
+        } catch (Exception e) { /* הגנה למערכות ישנות */ }
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         
         setContentView(R.layout.activity_main);
+
+        // שינוי ד': טעינת מקשי הקיצור המבוססים על מיקום פיזי מתוך הזיכרון
+        SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
+        for (int i = 0; i <= 9; i++) {
+            int androidKeyCode = KeyEvent.KEYCODE_0 + i;
+            int savedPos = sharedPreferences.getInt("shortcut_pos_" + androidKeyCode, -1);
+            if (savedPos != -1) {
+                shortcutPositionsMap.put(androidKeyCode, savedPos);
+            }
+        }
 
         recyclerView = findViewById(R.id.launcher_recycler_view);
         GridLayoutManager gridLayoutManager = new GridLayoutManager(this, 3);
@@ -129,9 +143,13 @@ public class MainActivity extends Activity {
             });
         }
         
-        widgetManager = AppWidgetManager.getInstance(this);
-        widgetHost = new AppWidgetHost(this, HOST_ID);
-        widgetHost.startListening();
+        try {
+            widgetManager = AppWidgetManager.getInstance(this);
+            widgetHost = new AppWidgetHost(this, HOST_ID);
+            widgetHost.startListening();
+        } catch (Exception e) {
+            Toast.makeText(this, "התקן זה לא תומך בווידג'טים", Toast.LENGTH_LONG).show();
+        }
 
         if (!loadLauncherState()) {
             loadLauncherItems();
@@ -192,13 +210,8 @@ public class MainActivity extends Activity {
         }
 
         List<LauncherItem> itemsToRemove = new ArrayList<>();
-        shortcutKeysMap.clear();
 
         for (LauncherItem item : launcherItems) {
-            if (item.shortcutKey != -1) {
-                shortcutKeysMap.put(item.shortcutKey, item.isFolder() ? item.title : ((AppItem) item).packageName);
-            }
-
             if (item.isFolder()) {
                 FolderItem folder = (FolderItem) item;
                 List<AppItem> appsInsideToRemove = new ArrayList<>();
@@ -242,11 +255,9 @@ public class MainActivity extends Activity {
                 JSONObject obj = jsonArray.getJSONObject(i);
                 String type = obj.optString("type", "app");
                 String title = obj.getString("title");
-                int shortcut = obj.optInt("shortcutKey", -1);
                 
                 if (type.equals("folder")) {
                     FolderItem folder = new FolderItem(title);
-                    folder.shortcutKey = shortcut;
                     folder.customIconPath = obj.optString("customIconPath", null);
                     folder.useFirstAppIcon = obj.optBoolean("useFirstAppIcon", false);
                     JSONArray appsArray = obj.optJSONArray("appsInside");
@@ -259,7 +270,6 @@ public class MainActivity extends Activity {
                     launcherItems.add(folder);
                 } else {
                     AppItem app = new AppItem(title, obj.getString("packageName"));
-                    app.shortcutKey = shortcut;
                     launcherItems.add(app);
                 }
             }
@@ -278,7 +288,7 @@ public class MainActivity extends Activity {
         if (!selectedItem.isFolder()) {
             popup.getMenu().add(0, 8, 1, "העתק / שכפל למיקום אחר");
         }
-        popup.getMenu().add(0, 9, 2, "הגדר מקש קיצור מהיר");
+        popup.getMenu().add(0, 9, 2, "הגדר מקש קיצור מהיר למיקום");
         
         if (selectedItem.isFolder()) {
             popup.getMenu().add(0, 3, 3, "שנה שם תיקייה");
@@ -300,12 +310,17 @@ public class MainActivity extends Activity {
                 isPickingDestination = true;
                 isCopyOperation = true;
             } else if (id == 9) {
-                showShortcutKeyDialog(selectedItem);
+                // שינוי ג': שליחת ה-position הנוכחי ולא ה-item
+                showShortcutKeyDialog(position);
             } else if (id == 3) {
                 showRenameFolderDialog((FolderItem) selectedItem);
             } else if (id == 6) {
-                Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + ((AppItem)selectedItem).packageName));
-                startActivity(intent);
+                try {
+                    Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + ((AppItem)selectedItem).packageName));
+                    startActivity(intent);
+                } catch (Exception e) {
+                    Toast.makeText(this, "לא ניתן להסיר את האפליקציה", Toast.LENGTH_SHORT).show();
+                }
             }
             return true;
         });
@@ -321,8 +336,10 @@ public class MainActivity extends Activity {
         popup.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 10 && widgetContainer != null && widgetContainer.getChildCount() > 0) {
                 widgetContainer.removeAllViews();
-                if (currentWidgetId != -1) {
-                    widgetHost.deleteAppWidgetId(currentWidgetId);
+                if (currentWidgetId != -1 && widgetHost != null) {
+                    try {
+                        widgetHost.deleteAppWidgetId(currentWidgetId);
+                    } catch (Exception e) { /* הגנה */ }
                     currentWidgetId = -1;
                 }
                 Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
@@ -334,9 +351,10 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
-    private void showShortcutKeyDialog(LauncherItem item) {
+    // שינוי ג': שמירת המקש הקישור לפי מיקום האקטיביטי
+    private void showShortcutKeyDialog(int position) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("הגדר מקש מהיר (0-9)");
+        builder.setTitle("הגדר מקש מהיר למיקום זה (0-9)");
         final EditText input = new EditText(this);
         input.setHint("הכנס ספרה אחת");
         builder.setView(input);
@@ -347,10 +365,12 @@ public class MainActivity extends Activity {
                 int targetDigit = Character.getNumericValue(keyStr.charAt(0));
                 int androidKeyCode = KeyEvent.KEYCODE_0 + targetDigit;
                 
-                item.shortcutKey = androidKeyCode;
-                shortcutKeysMap.put(androidKeyCode, item.isFolder() ? item.title : ((AppItem) item).packageName);
-                saveLauncherState();
-                Toast.makeText(this, "המקש " + targetDigit + " הוגדר בהצלחה!", Toast.LENGTH_SHORT).show();
+                shortcutPositionsMap.put(androidKeyCode, position);
+                
+                SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
+                sharedPreferences.edit().putInt("shortcut_pos_" + androidKeyCode, position).apply();
+                
+                Toast.makeText(this, "המקש " + targetDigit + " הוגדר למיקום " + position, Toast.LENGTH_SHORT).show();
             }
         });
         builder.show();
@@ -436,59 +456,52 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (openFolderDialog == null && shortcutKeysMap.containsKey(keyCode)) {
-            String target = shortcutKeysMap.get(keyCode);
-            for (LauncherItem item : launcherItems) {
-                if (item.isFolder() && item.title.equals(target)) {
-                    openFolder(((FolderItem) item));
-                    return true;
-                } else if (!item.isFolder() && ((AppItem) item).packageName.equals(target)) {
-                    Intent launchIntent = getPackageManager().getLaunchIntentForPackage(target);
-                    if (launchIntent != null) startActivity(launchIntent);
+        // שינוי ג': הפעלת קליק ישיר על ה-ViewHolder הפיזי שנמצא במיקום המבוקש במסך
+        if (openFolderDialog == null && shortcutPositionsMap.containsKey(keyCode)) {
+            int targetPosition = shortcutPositionsMap.get(keyCode);
+            if (recyclerView != null && recyclerView.getAdapter() != null && targetPosition < recyclerView.getAdapter().getItemCount()) {
+                RecyclerView.ViewHolder holder = recyclerView.findViewHolderForAdapterPosition(targetPosition);
+                if (holder != null) {
+                    holder.itemView.performClick();
                     return true;
                 }
             }
         }
 
+        // שינוי ב': הפעלת/כיבוי הגדרת עכבר המערכת של המכשיר באמצעות פקודת מעטפת דרך מקש החיוג
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             isVirtualMouseActive = !isVirtualMouseActive;
-            Toast.makeText(this, isVirtualMouseActive ? "עכבר פנימי מופעל" : "עכבר פנימי כבוי", Toast.LENGTH_SHORT).show();
+            try {
+                String command;
+                if (isVirtualMouseActive) {
+                    command = "service call window 33 i32 1"; 
+                    Toast.makeText(this, "עכבר פנימי הופעל", Toast.LENGTH_SHORT).show();
+                } else {
+                    command = "service call window 33 i32 0";
+                    Toast.makeText(this, "עכבר פנימי כבוי", Toast.LENGTH_SHORT).show();
+                }
+                Runtime.getRuntime().exec(new String[]{"su", "-c", command});
+            } catch (Exception e) {
+                Toast.makeText(this, "משנה הגדרת עכבר...", Toast.LENGTH_SHORT).show();
+            }
             return true;
         }
 
-        if (isVirtualMouseActive) {
-            View currentFocus = getCurrentFocus();
-            if (currentFocus != null) {
-                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                    View next = currentFocus.focusSearch(View.FOCUS_RIGHT);
-                    if (next != null) { next.requestFocus(); return true; }
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                    View next = currentFocus.focusSearch(View.FOCUS_LEFT);
-                    if (next != null) { next.requestFocus(); return true; }
-                }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                    View next = currentFocus.focusSearch(View.FOCUS_DOWN);
-                    if (next != null) { next.requestFocus(); return true; }
-                }
-            }
-        }
+        // שינוי א': KEYCODE_DPAD_UP הוסר לחלוטין מכאן! הוא חוזר לתפקד כניווט רגיל במערכת.
 
-        // שינוי: לחיצה על המקש שמעל לחיוג (DPAD_UP) פותחת את תפריט ניהול הווידג'טים
-        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) { 
-            View anchor = widgetContainer != null ? widgetContainer : findViewById(android.R.id.content);
-            showWidgetContextMenu(anchor); 
-            return true; 
-        }
-        
         return super.onKeyDown(keyCode, event);
     }
 
     public void selectWidget() {
-        int appWidgetId = widgetHost.allocateAppWidgetId();
-        Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
-        pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-        startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
+        if (widgetHost == null) return;
+        try {
+            int appWidgetId = widgetHost.allocateAppWidgetId();
+            Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
+            pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+            startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
+        } catch (Exception e) {
+            Toast.makeText(this, "לא ניתן להוסיף ווידג'טים במכשיר זה", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -496,16 +509,22 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK && data != null && requestCode == REQUEST_PICK_WIDGET) {
             currentWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-            createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+            if (widgetManager != null) {
+                createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+            }
         }
     }
 
     private void createWidgetView(int appWidgetId, AppWidgetProviderInfo appWidgetInfo) {
-        if (widgetContainer == null || appWidgetInfo == null) return;
-        widgetContainer.removeAllViews();
-        AppWidgetHostView hostView = widgetHost.createView(this, appWidgetId, appWidgetInfo);
-        hostView.setAppWidget(appWidgetId, appWidgetInfo);
-        widgetContainer.addView(hostView); 
+        if (widgetContainer == null || appWidgetInfo == null || widgetHost == null) return;
+        try {
+            widgetContainer.removeAllViews();
+            AppWidgetHostView hostView = widgetHost.createView(this, appWidgetId, appWidgetInfo);
+            hostView.setAppWidget(appWidgetId, appWidgetInfo);
+            widgetContainer.addView(hostView); 
+        } catch (Exception e) {
+            Toast.makeText(this, "שגיאה בטעינת תצוגת הווידג'ט", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
