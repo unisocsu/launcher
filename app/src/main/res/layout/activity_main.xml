@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
@@ -42,10 +42,9 @@
             android:id="@+id/launcher_recycler_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false"
             android:clipToPadding="false"
             android:focusable="true"
             android:clickable="true" />
 
     </LinearLayout>
-</androidx.core.widget.NestedScrollView>
+</ScrollView>
