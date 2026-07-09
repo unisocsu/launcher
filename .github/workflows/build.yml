@@ -5,9 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
-# הגנה קריטית: אם יש ריצה חדשה, היא מבטלת את הישנה ולא נכנסת לתור
+# מניעת תורים ע"י ביטול ריצות קודמות אם יש עדכון חדש
 concurrency:
-  group: android-build
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -22,18 +22,24 @@ jobs:
         java-version: '8'
         distribution: 'temurin'
 
-    - name: Prepare Gradle
+    - name: Build with Gradle
       run: |
-        if [ ! -f "gradlew" ]; then
-          gradle wrapper
+        # ניסיון למצוא את gradlew בתיקיית השורש או בתוך app
+        if [ -f "./gradlew" ]; then
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+        elif [ -f "./app/gradlew" ]; then
+          chmod +x ./app/gradlew
+          cd app && ./gradlew assembleDebug
+        else
+          echo "gradlew file not found!"
+          exit 1
         fi
-        chmod +x gradlew
 
-    - name: Build APK
-      run: ./gradlew assembleDebug
-
-    - name: Upload Artifact
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+        path: |
+          app/build/outputs/apk/debug/*.apk
+          build/outputs/apk/debug/*.apk
