@@ -64,10 +64,8 @@ public class MainActivity extends Activity {
     private boolean isPickingDestination = false;
     private boolean isCopyOperation = false;
 
-    private boolean isVirtualMouseActive = false;
     private int currentWidgetId = -1;
     
-    // שינוי ג': מפת מקשי הקיצור מבוססת כעת על מיקום (Position) במסך
     private Map<Integer, Integer> shortcutPositionsMap = new HashMap<>();
 
     public static abstract class LauncherItem {
@@ -115,7 +113,6 @@ public class MainActivity extends Activity {
         
         setContentView(R.layout.activity_main);
 
-        // שינוי ד': טעינת מקשי הקיצור המבוססים על מיקום פיזי מתוך הזיכרון
         SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
         for (int i = 0; i <= 9; i++) {
             int androidKeyCode = KeyEvent.KEYCODE_0 + i;
@@ -310,7 +307,6 @@ public class MainActivity extends Activity {
                 isPickingDestination = true;
                 isCopyOperation = true;
             } else if (id == 9) {
-                // שינוי ג': שליחת ה-position הנוכחי ולא ה-item
                 showShortcutKeyDialog(position);
             } else if (id == 3) {
                 showRenameFolderDialog((FolderItem) selectedItem);
@@ -351,7 +347,6 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
-    // שינוי ג': שמירת המקש הקישור לפי מיקום האקטיביטי
     private void showShortcutKeyDialog(int position) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("הגדר מקש מהיר למיקום זה (0-9)");
@@ -456,7 +451,6 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // שינוי ג': הפעלת קליק ישיר על ה-ViewHolder הפיזי שנמצא במיקום המבוקש במסך
         if (openFolderDialog == null && shortcutPositionsMap.containsKey(keyCode)) {
             int targetPosition = shortcutPositionsMap.get(keyCode);
             if (recyclerView != null && recyclerView.getAdapter() != null && targetPosition < recyclerView.getAdapter().getItemCount()) {
@@ -468,26 +462,38 @@ public class MainActivity extends Activity {
             }
         }
 
-        // שינוי ב': הפעלת/כיבוי הגדרת עכבר המערכת של המכשיר באמצעות פקודת מעטפת דרך מקש החיוג
+        // שינוי הגדרת העכבר עבור חבילת הלאנצ'ר עצמו
         if (keyCode == KeyEvent.KEYCODE_CALL) {
-            isVirtualMouseActive = !isVirtualMouseActive;
             try {
-                String command;
-                if (isVirtualMouseActive) {
-                    command = "service call window 33 i32 1"; 
-                    Toast.makeText(this, "עכבר פנימי הופעל", Toast.LENGTH_SHORT).show();
+                // שימוש בשם החבילה הנוכחי של האפליקציה הזו (הלאנצ'ר)
+                String launcherPackage = getPackageName();
+
+                // קריאת רשימת ה-mouse_support_list הנוכחית של המערכת
+                String currentList = android.provider.Settings.Global.getString(getContentResolver(), "mouse_support_list");
+                if (currentList == null) currentList = "";
+
+                String newList;
+                if (currentList.contains(launcherPackage)) {
+                    // אם הלאנצ'ר כבר רשום - נסיר אותו (ביטול עכבר במסך הבית)
+                    newList = currentList.replace(launcherPackage + ",", "");
+                    Toast.makeText(this, "עכבר בוטל עבור הלאנצ'ר", Toast.LENGTH_SHORT).show();
                 } else {
-                    command = "service call window 33 i32 0";
-                    Toast.makeText(this, "עכבר פנימי כבוי", Toast.LENGTH_SHORT).show();
+                    // אם הוא לא רשום - נוסיף אותו לרשימה הגלובלית עם פסיק מפריד בסוף
+                    newList = currentList.endsWith(",") || currentList.isEmpty() ? 
+                              currentList + launcherPackage + "," : 
+                              currentList + "," + launcherPackage + ",";
+                    Toast.makeText(this, "עכבר הופעל עבור הלאנצ'ר", Toast.LENGTH_SHORT).show();
                 }
-                Runtime.getRuntime().exec(new String[]{"su", "-c", command});
+
+                // דחיפת הרשימה המעודכנת חזרה לטבלה הגלובלית של ה-Duoqin באמצעות פקודת רוט
+                String cmd = "settings put global mouse_support_list \"" + newList + "\"";
+                Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+
             } catch (Exception e) {
-                Toast.makeText(this, "משנה הגדרת עכבר...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "שגיאה בשינוי הגדרת העכבר של הלאנצ'ר", Toast.LENGTH_SHORT).show();
             }
             return true;
         }
-
-        // שינוי א': KEYCODE_DPAD_UP הוסר לחלוטין מכאן! הוא חוזר לתפקד כניווט רגיל במערכת.
 
         return super.onKeyDown(keyCode, event);
     }
