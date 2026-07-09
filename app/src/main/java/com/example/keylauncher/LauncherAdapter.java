@@ -35,8 +35,8 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
         holder.titleTextView.setText(item.title);
 
         if (item.isFolder()) {
-            // שימוש באייקון מערכת רשמי וציבורי כדי לפתור את שגיאת הקומפילציה
-            holder.iconImageView.setImageResource(android.R.drawable.ic_menu_moreoption);
+            // שימוש באייקון מערכת ציבורי ומוכר המבטיח קומפילציה חלקה בכל גרסאות ה-SDK
+            holder.iconImageView.setImageResource(android.R.drawable.ic_input_add);
         } else {
             MainActivity.AppItem appItem = (MainActivity.AppItem) item;
             try {
