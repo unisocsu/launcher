@@ -5,6 +5,10 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
+  workflow_dispatch: # מאפשר לך להפעיל את הבנייה ידנית מהאתר של גיטהאב בכל רגע!
+
+permissions:
+  contents: write
 
 jobs:
   build:
