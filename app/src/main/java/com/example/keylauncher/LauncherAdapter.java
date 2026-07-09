@@ -2,9 +2,11 @@ package com.example.keylauncher;
 
 import android.content.Context;
 import android.content.Intent;
+import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -34,8 +36,14 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
         MainActivity.LauncherItem item = items.get(position);
         holder.titleTextView.setText(item.title);
 
+        // --- לוגיקת בדיקת העכבר וסימון ה-V ---
+        String mouseList = Settings.Global.getString(context.getContentResolver(), "mouse_support_list");
+        if (mouseList == null) mouseList = "";
+
         if (item.isFolder()) {
             holder.iconImageView.setImageResource(android.R.drawable.sym_def_app_icon);
+            // תיקיות לא תומכות בעכבר - נסתיר את ה-V
+            holder.mCheckBox.setVisibility(View.GONE);
         } else {
             MainActivity.AppItem appItem = (MainActivity.AppItem) item;
             try {
@@ -43,7 +51,17 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             } catch (Exception e) {
                 holder.iconImageView.setImageResource(android.R.drawable.sym_def_app_icon);
             }
+
+            // אם שם החבילה של האפליקציה נמצא ברשימה של ה-Duoqin, נציג וי מסומן!
+            if (mouseList.contains(appItem.packageName)) {
+                holder.mCheckBox.setChecked(true);
+                holder.mCheckBox.setVisibility(View.VISIBLE);
+            } else {
+                holder.mCheckBox.setChecked(false);
+                holder.mCheckBox.setVisibility(View.INVISIBLE); // מוסתר אך שומר על מקומו (או View.GONE אם תרצה שיעלם לגמרי)
+            }
         }
+        // -------------------------------------
 
         holder.itemView.setOnClickListener(v -> {
             if (context instanceof MainActivity) {
@@ -87,11 +105,13 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
     public static class ViewHolder extends RecyclerView.ViewHolder {
         ImageView iconImageView;
         TextView titleTextView;
+        CheckBox mCheckBox; // ה-CheckBox שמצאת מה-XML של ה-Duoqin
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             iconImageView = itemView.findViewById(R.id.item_icon);
             titleTextView = itemView.findViewById(R.id.item_title);
+            mCheckBox = itemView.findViewById(R.id.mCheckBox); // ודא שיש לך רכיב כזה בקובץ item_launcher.xml
         }
     }
 }
