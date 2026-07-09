@@ -1,48 +1,37 @@
-\name: Android CI
+name: Android Build KitKat Compatibility
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches: [ "main", "master" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout Source Code
       uses: actions/checkout@v4
 
-    - name: set up JDK 17
+    # הגדרת גרסת ה-Java הנכונה לפרויקט ישן (תואם אנדרואיד 4.4 / KitKat)
+    - name: Set up JDK 8
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
+        java-version: '8'
         distribution: 'temurin'
-
-    # הגדרת ה-Gradle המדויק (7.5) בצורה רשמית
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
-      with:
-        gradle-version: '7.5'
-
-    # הרצה ישירות בתיקיית השורש הנוכחית שבה נמצא הפרויקט
-    - name: Generate Gradle Wrapper
-      run: gradle wrapper
-      working-directory: .
+        cache: gradle
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-      working-directory: .
 
+    # הרצת הבנייה והפקת ה-APK
     - name: Build with Gradle
       run: ./gradlew assembleDebug
-      working-directory: .
 
-    # העלאת ה-APK מתיקיית ה-app הסטנדרטית
-    - name: Upload APK Artifact
+    # שמירת ה-APK שנוצר כדי שתוכל להוריד אותו ולהתקין עם ADB
+    - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: keylauncher-debug-apk
+        name: launcher-debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
