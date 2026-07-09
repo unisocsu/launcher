@@ -21,10 +21,20 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Specific Gradle Wrapper
+    - name: Download Stable Gradle Wrapper
       run: |
-        # במקום לתת לגריידל לבחור, אנחנו מתקינים גרסה 7.5 שהיא "סוס עבודה" לפרויקטים ישנים
-        gradle wrapper --gradle-version 7.5
+        # הורדה ישירה של קבצי ה-Wrapper של גרסה 7.5 בלי להפעיל את המנוע המקומי
+        mkdir -p gradle/wrapper
+        curl -L https://raw.githubusercontent.com/gradle/gradle/v7.5.0/gradlew -o gradlew
+        curl -L https://raw.githubusercontent.com/gradle/gradle/v7.5.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+        
+        # יצירת קובץ ההגדרות המתאים בדיוק לגרסה 7.5
+        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        echo "distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        
         chmod +x gradlew
 
     - name: Build APK
@@ -34,4 +44,6 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+        path: |
+          app/build/outputs/apk/debug/app-debug.apk
+          build/outputs/apk/debug/*.apk
