@@ -3,20 +3,17 @@ plugins {
 }
 
 android {
-    // מומלץ להשתמש ב-Compile ו-Target גבוהים כדי ש-GitHub יוכל לקמפל עם ה-SDK העדכני
-    compileSdk 34
+    // השורה הקריטית שפותרת את שגיאת ה-Build הנוכחית:
+    namespace 'com.example.keylauncher'
+    
+    compileSdk 33
 
     defaultConfig {
         applicationId "com.example.keylauncher"
-        
-        // התאמה קריטית לאנדרואיד 4.4 (KitKat)
-        minSdk 19 
-        targetSdk 34
-        
+        minSdk 21
+        targetSdk 33
         versionCode 1
         versionName "1.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -25,28 +22,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    
-    // הגדרת תאימות Java (חובה כדי למנוע שגיאות קומפילציה ב-GitHub Actions)
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
 }
 
 dependencies {
-    // ספריות בסיס של אנדרואיד ותמיכה לאחור ב-UI
-    implementation 'androidx.appcompat:appcompat:1.2.0'
-    implementation 'com.google.android.material:material:1.3.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
-    
-    // ה-RecyclerView שבו אנחנו משתמשים להצגת הרשת והתיקיות
-    implementation 'androidx.recyclerview:recyclerview:1.2.1'
-    
-    // ספריית ה-Gson בגרסה 2.8.9 התואמת ב-100% לאנדרואיד 4.4
-    implementation 'com.google.code.gson:gson:2.8.9'
-
-    // ספריות לבדיקות קוד (טסטים)
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
 }
