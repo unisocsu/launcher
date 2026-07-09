@@ -54,8 +54,6 @@ public class MainActivity extends Activity {
 
     private static final int HOST_ID = 1024;
     private static final int REQUEST_PICK_WIDGET = 1;
-    private static final int REQUEST_CREATE_WIDGET = 2;
-    private static final int REQUEST_PICK_IMAGE = 3;
     
     private AppWidgetManager widgetManager;
     private AppWidgetHost widgetHost;
@@ -461,10 +459,22 @@ public class MainActivity extends Activity {
         if (isVirtualMouseActive) {
             View currentFocus = getCurrentFocus();
             if (currentFocus != null) {
-                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) return currentFocus.focusSearch(View.FOCUS_RIGHT).requestFocus();
-                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) return currentFocus.focusSearch(View.FOCUS_LEFT).requestFocus();
-                if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return currentFocus.focusSearch(View.FOCUS_UP).requestFocus();
-                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) return currentFocus.focusSearch(View.FOCUS_DOWN).requestFocus();
+                if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    View next = currentFocus.focusSearch(View.FOCUS_RIGHT);
+                    if (next != null) { next.requestFocus(); return true; }
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                    View next = currentFocus.focusSearch(View.FOCUS_LEFT);
+                    if (next != null) { next.requestFocus(); return true; }
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    View next = currentFocus.focusSearch(View.FOCUS_UP);
+                    if (next != null) { next.requestFocus(); return true; }
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    View next = currentFocus.focusSearch(View.FOCUS_DOWN);
+                    if (next != null) { next.requestFocus(); return true; }
+                }
             }
         }
 
