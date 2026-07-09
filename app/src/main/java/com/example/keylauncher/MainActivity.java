@@ -312,10 +312,10 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
-    private void showWidgetContextMenu(View anchorView) {
+    public void showWidgetContextMenu(View anchorView) {
         PopupMenu popup = new PopupMenu(this, anchorView);
         popup.getMenu().add(0, 10, 0, "הסר ווידג'ט נוכחי");
-        popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש (מקש 9)");
+        popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש");
         popup.getMenu().add(0, 2, 2, "ביטול");
 
         popup.setOnMenuItemClickListener(item -> {
@@ -467,10 +467,6 @@ public class MainActivity extends Activity {
                     View next = currentFocus.focusSearch(View.FOCUS_LEFT);
                     if (next != null) { next.requestFocus(); return true; }
                 }
-                if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                    View next = currentFocus.focusSearch(View.FOCUS_UP);
-                    if (next != null) { next.requestFocus(); return true; }
-                }
                 if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                     View next = currentFocus.focusSearch(View.FOCUS_DOWN);
                     if (next != null) { next.requestFocus(); return true; }
@@ -478,7 +474,13 @@ public class MainActivity extends Activity {
             }
         }
 
-        if (keyCode == KeyEvent.KEYCODE_9) { selectWidget(); return true; }
+        // שינוי: לחיצה על המקש שמעל לחיוג (DPAD_UP) פותחת את תפריט ניהול הווידג'טים
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) { 
+            View anchor = widgetContainer != null ? widgetContainer : findViewById(android.R.id.content);
+            showWidgetContextMenu(anchor); 
+            return true; 
+        }
+        
         return super.onKeyDown(keyCode, event);
     }
 
