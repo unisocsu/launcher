@@ -1,44 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@android:color/transparent"
-    android:paddingLeft="12dp"
-    android:paddingRight="12dp"
-    android:paddingBottom="12dp"
-    android:paddingTop="4dp"> <TextView
-        android:id="@+id/date_time_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:paddingTop="2dp"
-        android:paddingBottom="4dp"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:shadowColor="#000000"
-        android:shadowDx="2"
-        android:shadowDy="2"
-        android:shadowRadius="4" />
+    android:fillViewport="true"
+    android:background="@android:color/transparent">
 
     <LinearLayout
-        android:id="@+id/widget_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:gravity="center"
-        android:paddingBottom="4dp"
-        android:minHeight="60dp" />
+        android:padding="12dp">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/launcher_recycler_view"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:scrollbars="vertical"
-        android:focusable="true"
-        android:clickable="true" />
+        <TextView
+            android:id="@+id/date_time_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:paddingTop="4dp"
+            android:paddingBottom="8dp"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:shadowColor="#000000"
+            android:shadowDx="2"
+            android:shadowDy="2"
+            android:shadowRadius="4" />
 
-</LinearLayout>
+        <LinearLayout
+            android:id="@+id/widget_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingBottom="8dp"
+            android:minHeight="60dp"
+            android:focusable="true"
+            android:clickable="true"
+            android:background="?android:attr/selectableItemBackground" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/launcher_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"
+            android:clipToPadding="false"
+            android:focusable="true"
+            android:clickable="true" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>
