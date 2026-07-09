@@ -21,9 +21,9 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Gradle Wrapper
+    - name: Setup Specific Gradle Wrapper
       run: |
-        # במקום לתת ל-gradle לבחור לבד, אנחנו מכריחים אותו להשתמש בגרסה 7.5
+        # במקום לתת לגריידל לבחור, אנחנו מתקינים גרסה 7.5 שהיא "סוס עבודה" לפרויקטים ישנים
         gradle wrapper --gradle-version 7.5
         chmod +x gradlew
 
