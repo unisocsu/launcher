@@ -2,20 +2,20 @@ package com.example.keylauncher;
 
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
 public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHolder> {
 
-    private List<MainActivity.LauncherItem> items;
-    private Context context;
+    private final Context context;
+    private final List<MainActivity.LauncherItem> items;
 
     public LauncherAdapter(Context context, List<MainActivity.LauncherItem> items) {
         this.context = context;
@@ -32,71 +32,46 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         MainActivity.LauncherItem item = items.get(position);
-        
+        holder.titleTextView.setText(item.title);
+
         if (item.isFolder()) {
-            MainActivity.FolderItem folder = (MainActivity.FolderItem) item;
-            holder.textView.setText(folder.title);
-            
-            // שימוש באייקון מערכת מובנה במקום אייקון מקומי חסר למניעת שגיאות בבנייה
-            if (folder.customIconPath != null) {
-                try {
-                    holder.imageView.setImageURI(Uri.parse(folder.customIconPath));
-                } catch (Exception e) {
-                    holder.imageView.setImageResource(android.R.drawable.sym_def_app_icon);
-                }
-            } else if (folder.useFirstAppIcon && !folder.appsInside.isEmpty()) {
-                try {
-                    MainActivity.AppItem firstApp = folder.appsInside.get(0);
-                    holder.imageView.setImageDrawable(context.getPackageManager().getApplicationIcon(firstApp.packageName));
-                } catch (Exception e) {
-                    holder.imageView.setImageResource(android.R.drawable.sym_def_app_icon);
-                }
-            } else {
-                holder.imageView.setImageResource(android.R.drawable.sym_def_app_icon);
-            }
-            
+            holder.iconImageView.setImageResource(android.R.drawable.get_dark_filtered_ic_id(android.R.drawable.ic_menu_selectable));
         } else {
             MainActivity.AppItem appItem = (MainActivity.AppItem) item;
-            holder.textView.setText(appItem.title);
-            
             try {
-                holder.imageView.setImageDrawable(context.getPackageManager().getApplicationIcon(appItem.packageName));
+                holder.iconImageView.setImageDrawable(context.getPackageManager().getApplicationIcon(appItem.packageName));
             } catch (Exception e) {
-                holder.imageView.setImageResource(android.R.drawable.sym_def_app_icon);
+                holder.iconImageView.setImageResource(android.R.drawable.sym_def_app_icon);
             }
         }
 
-        // 1. האזנה ללחיצה ארוכה (Long Click)
-        holder.itemView.setOnLongClickListener(v -> {
-            if (context instanceof MainActivity) {
-                MainActivity mainActivity = (MainActivity) context;
-                if (!mainActivity.isPickingDestination()) {
-                    mainActivity.showContextMenu(holder.itemView, position);
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        // 2. טיפול בלחיצה רגילה
         holder.itemView.setOnClickListener(v -> {
             if (context instanceof MainActivity) {
                 MainActivity mainActivity = (MainActivity) context;
-
                 if (mainActivity.isPickingDestination()) {
                     mainActivity.handleDestinationSelected(position);
+                    return;
+                }
+
+                if (item.isFolder()) {
+                    mainActivity.openFolder((MainActivity.FolderItem) item);
                 } else {
-                    if (item.isFolder()) {
-                        mainActivity.openFolder((MainActivity.FolderItem) item);
+                    MainActivity.AppItem appItem = (MainActivity.AppItem) item;
+                    Intent intent = context.getPackageManager().getLaunchIntentForPackage(appItem.packageName);
+                    if (intent != null) {
+                        context.startActivity(intent);
                     } else {
-                        MainActivity.AppItem appItem = (MainActivity.AppItem) item;
-                        Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(appItem.packageName);
-                        if (launchIntent != null) {
-                            context.startActivity(launchIntent);
-                        }
+                        Toast.makeText(context, "לא ניתן לפתוח את האפליקציה", Toast.LENGTH_SHORT).show();
                     }
                 }
             }
+        });
+
+        holder.itemView.setOnLongClickListener(v -> {
+            if (context instanceof MainActivity) {
+                ((MainActivity) context).showContextMenu(v, position);
+            }
+            return true;
         });
     }
 
@@ -106,16 +81,13 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        ImageView imageView;
-        TextView textView;
+        ImageView iconImageView;
+        TextView titleTextView;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
-            imageView = itemView.findViewById(R.id.item_icon);
-            textView = itemView.findViewById(R.id.item_text);
-            
-            itemView.setFocusable(true);
-            itemView.setClickable(true);
+            iconImageView = itemView.findViewById(R.id.item_icon);
+            titleTextView = itemView.findViewById(R.id.item_title);
         }
     }
 }
