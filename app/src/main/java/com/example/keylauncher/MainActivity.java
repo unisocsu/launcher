@@ -328,10 +328,12 @@ public class MainActivity extends Activity {
         PopupMenu popup = new PopupMenu(this, anchorView);
         popup.getMenu().add(0, 10, 0, "הסר ווידג'ט נוכחי");
         popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש");
-        popup.getMenu().add(0, 2, 2, "ביטול");
+        popup.getMenu().add(0, 12, 2, "שייך מקש לכפתור בווידג'ט 🕵️‍♂️"); // החיבור החכם ל-WidgetKeyController
+        popup.getMenu().add(0, 2, 3, "ביטול");
 
         popup.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == 10 && widgetContainer != null && widgetContainer.getChildCount() > 0) {
+            int itemId = item.getItemId();
+            if (itemId == 10 && widgetContainer != null && widgetContainer.getChildCount() > 0) {
                 widgetContainer.removeAllViews();
                 if (currentWidgetId != -1 && widgetHost != null) {
                     try {
@@ -340,8 +342,11 @@ public class MainActivity extends Activity {
                     currentWidgetId = -1;
                 }
                 Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
-            } else if (item.getItemId() == 11) {
+            } else if (itemId == 11) {
                 selectWidget();
+            } else if (itemId == 12) {
+                // קריאה למנגנון הבלשי שיזמת
+                WidgetKeyController.showWidgetBindingDialog(this);
             }
             return true;
         });
@@ -513,7 +518,7 @@ public class MainActivity extends Activity {
             pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
             startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
         } catch (Exception e) {
-            Toast.makeText(this, "לא ניתן להוסיף ווידג'טים במכשיר זה", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "לא ניתן להוסיף ווידג'טים במכשיר זה", Toast.LENGTH_LONG).show();
         }
     }
 
