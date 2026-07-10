@@ -1,6 +1,7 @@
 package com.example.keylauncher;
 
 import org.json.JSONArray;
+import com.example.keylauncher.WidgetKeyController;
 import org.json.JSONObject;
 import android.app.Activity;
 import android.app.AlertDialog;
