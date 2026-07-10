@@ -451,6 +451,12 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        // --- תפיסת המקש עבור מנהל הווידג'טים הייעודי ---
+        if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
+            return true; // פקודת הווידג'ט טופלה בהצלחה, עצור כאן.
+        }
+        // ------------------------------------------------
+
         if (openFolderDialog == null && shortcutPositionsMap.containsKey(keyCode)) {
             int targetPosition = shortcutPositionsMap.get(keyCode);
             if (recyclerView != null && recyclerView.getAdapter() != null && targetPosition < recyclerView.getAdapter().getItemCount()) {
