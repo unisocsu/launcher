@@ -58,7 +58,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
                 holder.mCheckBox.setVisibility(View.VISIBLE);
             } else {
                 holder.mCheckBox.setChecked(false);
-                holder.mCheckBox.setVisibility(View.INVISIBLE); // מוסתר אך שומר על מקומו (או View.GONE אם תרצה שיעלם לגמרי)
+                holder.mCheckBox.setVisibility(View.INVISIBLE); // מוסתר אך שומר על מקומו
             }
         }
         // -------------------------------------
@@ -103,15 +103,16 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        ImageView iconImageView;
-        TextView titleTextView;
-        CheckBox mCheckBox; // ה-CheckBox שמצאת מה-XML של ה-Duoqin
+        public ImageView iconImageView;
+        public TextView titleTextView;
+        public CheckBox mCheckBox; 
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             iconImageView = itemView.findViewById(R.id.item_icon);
             titleTextView = itemView.findViewById(R.id.item_title);
-            mCheckBox = itemView.findViewById(R.id.mCheckBox); // ודא שיש לך רכיב כזה בקובץ item_launcher.xml
+            // מקושר כעת ל-ID התקין באותיות קטנות מתוך ה-XML
+            mCheckBox = itemView.findViewById(R.id.mcheckbox); 
         }
     }
 }
