@@ -1,0 +1,37 @@
+package com.example.keylauncher;
+
+import android.content.Context;
+import android.content.Intent;
+import android.view.KeyEvent;
+import android.widget.Toast;
+
+public class WidgetKeyController {
+
+    // פונקציה שמטפלת בלחיצות מקשים עבור ווידג'טים
+    public static boolean handleWidgetKey(Context context, int keyCode) {
+        
+        // כאן נגדיר את המקש שאתה רוצה, לדוגמה מקש 5
+        if (keyCode == KeyEvent.KEYCODE_5) {
+            
+            try {
+                // TODO: אחרי שנבדוק בלוגים, נחליף את ה-Intent הזה ב-Intent האמיתי שמצאנו!
+                Intent widgetIntent = new Intent();
+                
+                // דוגמה זמנית (למשל הפעלת מדיה גלובלית) כדי לראות שזה עובד:
+                widgetIntent.setAction(Intent.ACTION_MEDIA_BUTTON);
+                widgetIntent.putExtra(Intent.EXTRA_KEY_EVENT, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY));
+                
+                context.sendBroadcast(widgetIntent);
+                
+                Toast.makeText(context, "פקודת ווידג'ט נשלחה!", Toast.LENGTH_SHORT).show();
+                return true; // תפסנו את הלחיצה בהצלחה
+                
+            } catch (Exception e) {
+                Toast.makeText(context, "שגיאה בשליחת פקודת ווידג'ט", Toast.LENGTH_SHORT).show();
+                e.printStackTrace();
+            }
+        }
+        
+        return false; // המקש לא קשור לווידג'ט, תמשיך ללוגיקה הרגילה
+    }
+}
