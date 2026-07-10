@@ -9,12 +9,27 @@
     android:clickable="true"
     android:background="?android:attr/selectableItemBackground">
 
-    <ImageView
-        android:id="@+id/item_icon"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginBottom="4dp"
-        android:contentDescription="App Icon" />
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp">
+
+        <ImageView
+            android:id="@+id/item_icon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="App Icon" />
+
+        <CheckBox
+            android:id="@+id/mcheckbox"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_alignTop="@id/item_icon"
+            android:layout_alignRight="@id/item_icon"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="invisible" />
+    </RelativeLayout>
 
     <TextView
         android:id="@+id/item_title"
