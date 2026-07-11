@@ -5,6 +5,7 @@ import com.example.keylauncher.WidgetKeyController;
 import org.json.JSONObject;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -119,6 +120,9 @@ public class MainActivity extends Activity {
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         
         setContentView(R.layout.activity_main);
+
+        // הפעלת שירות ההאזנה ברקע לפעילות ווידג'טים
+        WidgetKeyController.startBackgroundListener(this);
 
         SharedPreferences sharedPreferences = getGetSharedPreferences();
         for (int i = 0; i <= 9; i++) {
@@ -302,7 +306,6 @@ public class MainActivity extends Activity {
     }
 
     private PopupMenu createPurplePopupMenu(View anchorView) {
-        // שימוש בערכת נושא מובנית כהה/צבעונית שמונעת קריסות קומפילציה
         ContextThemeWrapper wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_Dialog);
         return new PopupMenu(wrapper, anchorView);
     }
@@ -434,7 +437,15 @@ public class MainActivity extends Activity {
         PopupMenu popup = createPurplePopupMenu(anchorView);
         popup.getMenu().add(0, 10, 0, "הסר ווידג'ט נוכחי");
         popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש");
-        popup.getMenu().add(0, 12, 2, "שייך מקש לכפתור בווידג'ט 🕵️‍♂️"); 
+        
+        // קריאת הפעולה האחרונה שנרשמה ברקע על ידי ה-Controller
+        final String lastAction = WidgetKeyController.getLastDetectedAction(this);
+        if (lastAction != null) {
+            popup.getMenu().add(0, 12, 2, "שייך מקש לפעולה האחרונה (" + shortenActionName(lastAction) + ") 🕵️‍♂️");
+        } else {
+            popup.getMenu().add(0, 12, 2, "לא זוהתה פעילות ווידג'ט עדיין");
+        }
+        
         popup.getMenu().add(0, 2, 3, "ביטול");
 
         popup.setOnMenuItemClickListener(item -> {
@@ -452,12 +463,48 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
             } else if (itemId == 11) {
                 selectWidget();
-            } else if (itemId == 12) {
-                WidgetKeyController.showWidgetBindingDialog(this);
+            } else if (itemId == 12 && lastAction != null) {
+                showKeyAssignmentDialog(lastAction);
             }
             return true;
         });
         popup.show();
+    }
+
+    private void showKeyAssignmentDialog(String actionToBind) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("שיוך מקש מהיר לווידג'ט");
+        builder.setMessage("לחץ על ספרה (0-9) כדי לשייך אותה לפעולה:\n" + actionToBind);
+        
+        final EditText input = new EditText(this);
+        input.setHint("הכנס ספרה אחת ולחץ אישור");
+        builder.setView(input);
+
+        builder.setPositiveButton("שמור שיוך", (dialog, which) -> {
+            String keyStr = input.getText().toString().trim();
+            if (!keyStr.isEmpty() && Character.isDigit(keyStr.charAt(0))) {
+                int targetDigit = Character.getNumericValue(keyStr.charAt(0));
+                int androidKeyCode = KeyEvent.KEYCODE_0 + targetDigit;
+                
+                WidgetKeyController.saveBinding(this, androidKeyCode, actionToBind);
+                Toast.makeText(this, "המקש " + targetDigit + " שויך בהצלחה לפעולת הווידג'ט!", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, "קלט לא תקין, השיוך בוטל", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("ביטול", null);
+        builder.show();
+    }
+
+    private String shortenActionName(String fullAction) {
+        if (fullAction == null) return "";
+        if (fullAction.contains(".")) {
+            return fullAction.substring(fullAction.lastIndexOf(".") + 1);
+        }
+        if (fullAction.contains("/")) {
+            return fullAction.substring(fullAction.lastIndexOf("/") + 1);
+        }
+        return fullAction;
     }
 
     private void showShortcutKeyDialog(int position) {
