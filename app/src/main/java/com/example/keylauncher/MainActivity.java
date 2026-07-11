@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -69,8 +70,10 @@ public class MainActivity extends Activity {
     
     private Map<Integer, Integer> shortcutPositionsMap = new HashMap<>();
 
+    // מחלקות הבסיס עם תמיכה בשמות ואייקונים מותאמים אישית
     public static abstract class LauncherItem {
         public String title;
+        public String customTitle = null; // שם מותאם אישית שהמשתמש בחר
         public String type; 
         public int shortcutKey = -1; 
         public abstract boolean isFolder();
@@ -78,6 +81,8 @@ public class MainActivity extends Activity {
 
     public static class AppItem extends LauncherItem {
         public String packageName;
+        public String customIconUri = null; // נתיב לאייקון מותאם אישית
+        
         public AppItem(String title, String packageName) {
             this.title = title;
             this.packageName = packageName;
@@ -104,12 +109,14 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
+        // א) ביטול מסך מלא - מאפשר שורת סטטוס עליונה רגילה ומציג טפט מאחורי הלאנצ'ר
         try {
             getWindow().setFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER,
                 WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER
             );
-        } catch (Exception e) { /* הגנה למערכות ישנות */ }
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        } catch (Exception e) { /* הגנה */ }
         getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         
         setContentView(R.layout.activity_main);
@@ -153,6 +160,15 @@ public class MainActivity extends Activity {
             loadLauncherItems();
         } else {
             syncAndCleanLauncherItems(); 
+        }
+
+        // ו) שחזור אוטומטי של הווידג'ט השמור
+        currentWidgetId = sharedPreferences.getInt("saved_widget_id", -1);
+        if (currentWidgetId != -1 && widgetManager != null) {
+            AppWidgetProviderInfo info = widgetManager.getAppWidgetInfo(currentWidgetId);
+            if (info != null) {
+                createWidgetView(currentWidgetId, info);
+            }
         }
 
         adapter = new LauncherAdapter(this, launcherItems);
@@ -256,18 +272,24 @@ public class MainActivity extends Activity {
                 
                 if (type.equals("folder")) {
                     FolderItem folder = new FolderItem(title);
+                    folder.customTitle = obj.optString("customTitle", null);
                     folder.customIconPath = obj.optString("customIconPath", null);
                     folder.useFirstAppIcon = obj.optBoolean("useFirstAppIcon", false);
                     JSONArray appsArray = obj.optJSONArray("appsInside");
                     if (appsArray != null) {
                         for (int j = 0; j < appsArray.length(); j++) {
                             JSONObject appObj = appsArray.getJSONObject(j);
-                            folder.appsInside.add(new AppItem(appObj.getString("title"), appObj.getString("packageName")));
+                            AppItem appItem = new AppItem(appObj.getString("title"), appObj.getString("packageName"));
+                            appItem.customTitle = appObj.optString("customTitle", null);
+                            appItem.customIconUri = appObj.optString("customIconUri", null);
+                            folder.appsInside.add(appItem);
                         }
                     }
                     launcherItems.add(folder);
                 } else {
                     AppItem app = new AppItem(title, obj.getString("packageName"));
+                    app.customTitle = obj.optString("customTitle", null);
+                    app.customIconUri = obj.optString("customIconUri", null);
                     launcherItems.add(app);
                 }
             }
@@ -277,8 +299,21 @@ public class MainActivity extends Activity {
         }
     }
 
-    public void showContextMenu(View anchorView, int position) {
+    // ב) פופאפ תפריט סגול מותאם אישית
+    private PopupMenu createPurplePopupMenu(View anchorView) {
         PopupMenu popup = new PopupMenu(this, anchorView);
+        // שינוי עיצוב ה-Popup לסגול מתוך הקוד
+        try {
+            View menuView = popup.getDragToOpenListener().getAnchor();
+            if (menuView != null) {
+                menuView.setBackgroundColor(Color.parseColor("#8A2BE2")); // סגול עמוק מודרני
+            }
+        } catch (Exception e) {}
+        return popup;
+    }
+
+    public void showContextMenu(View anchorView, int position) {
+        PopupMenu popup = createPurplePopupMenu(anchorView);
         LauncherItem selectedItem = (openFolderDialog != null && currentlyOpenFolderItem != null) ? 
                 currentlyOpenFolderItem.appsInside.get(position) : launcherItems.get(position);
 
@@ -288,12 +323,17 @@ public class MainActivity extends Activity {
         }
         popup.getMenu().add(0, 9, 2, "הגדר מקש קיצור מהיר למיקום");
         
-        if (selectedItem.isFolder()) {
-            popup.getMenu().add(0, 3, 3, "שנה שם תיקייה");
+        // ד, ה) אפשרויות מתקדמות לשינוי שם, אייקון ועכבר לאפליקציה
+        if (!selectedItem.isFolder()) {
+            popup.getMenu().add(0, 20, 3, "ערוך שם ואייקון אפליקציה ✏️");
+            popup.getMenu().add(0, 21, 4, "הגדרות עכבר ייעודיות 🖱️");
+            popup.getMenu().add(0, 6, 5, "הסר התקנת אפליקציה");
         } else {
-            popup.getMenu().add(0, 6, 3, "הסר התקנת אפליקציה");
+            // ג) אפשרויות עריכת תיקייה
+            popup.getMenu().add(0, 3, 3, "שנה שם תיקייה");
+            popup.getMenu().add(0, 22, 4, "שנה אייקון תיקייה 🖼️");
         }
-        popup.getMenu().add(0, 2, 4, "ביטול");
+        popup.getMenu().add(0, 2, 6, "ביטול");
 
         popup.setOnMenuItemClickListener(item -> {
             int id = item.getItemId();
@@ -311,6 +351,12 @@ public class MainActivity extends Activity {
                 showShortcutKeyDialog(position);
             } else if (id == 3) {
                 showRenameFolderDialog((FolderItem) selectedItem);
+            } else if (id == 20) {
+                showEditAppDialog((AppItem) selectedItem);
+            } else if (id == 21) {
+                showAppMouseConfigDialog((AppItem) selectedItem);
+            } else if (id == 22) {
+                showFolderIconConfigDialog((FolderItem) selectedItem);
             } else if (id == 6) {
                 try {
                     Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + ((AppItem)selectedItem).packageName));
@@ -324,11 +370,83 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
+    // ג) שינוי אייקון לתיקייה (מתמונה או מאייקון של אפליקציה פנימית)
+    private void showFolderIconConfigDialog(FolderItem folder) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("הגדרת אייקון לתיקייה: " + folder.title);
+        String[] options = {"השתמש באייקון האפליקציה הראשונה בתיקייה", "בחר תמונה מהמכשיר (גלריה)", "איפוס לאייקון ברירת מחדל"};
+        
+        builder.setItems(options, (dialog, which) -> {
+            if (which == 0) {
+                folder.useFirstAppIcon = true;
+                folder.customIconPath = null;
+                Toast.makeText(this, "הוגדר אייקון האפליקציה הראשונה", Toast.LENGTH_SHORT).show();
+            } else if (which == 1) {
+                // פתיחת גלריה לבחירת תמונה
+                Intent intent = new Intent(Intent.ACTION_PICK);
+                intent.setType("image/*");
+                startActivityForResult(Intent.createChooser(intent, "בחר תמונה לאייקון"), 200 + launcherItems.indexOf(folder));
+            } else {
+                folder.useFirstAppIcon = false;
+                folder.customIconPath = null;
+            }
+            saveLauncherState();
+            adapter.notifyDataSetChanged();
+        });
+        builder.show();
+    }
+
+    // ד) דיאלוג לשינוי שם ואייקון של אפליקציה
+    private void showEditAppDialog(AppItem appItem) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("עריכת אפליקציה");
+        
+        View view = LayoutInflater.from(this).inflate(android.R.layout.activity_list_item, null);
+        final EditText input = new EditText(this);
+        input.setText(appItem.customTitle != null ? appItem.customTitle : appItem.title);
+        builder.setView(input);
+
+        builder.setPositiveButton("שמור שם", (dialog, which) -> {
+            String newName = input.getText().toString().trim();
+            if (!newName.isEmpty()) {
+                appItem.customTitle = newName;
+                saveLauncherState();
+                adapter.notifyDataSetChanged();
+            }
+        });
+        
+        builder.setNeutralButton("החלף אייקון מהגלריה", (dialog, which) -> {
+            Intent intent = new Intent(Intent.ACTION_PICK);
+            intent.setType("image/*");
+            startActivityForResult(Intent.createChooser(intent, "בחר אייקון"), 300 + launcherItems.indexOf(appItem));
+        });
+
+        builder.setNegativeButton("ביטול", null);
+        builder.show();
+    }
+
+    // ה) ניהול הגדרות עכבר ספציפיות לכל אפליקציה בנפרד
+    private void showAppMouseConfigDialog(AppItem appItem) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("הגדרת עכבר עבור: " + appItem.title);
+        
+        SharedPreferences sharedPreferences = getSharedPreferences("AppMousePrefs", MODE_PRIVATE);
+        boolean isMouseEnabled = sharedPreferences.getBoolean(appItem.packageName, false);
+
+        builder.setMessage("האם להפעיל תמיכת עכבר אוטומטית בכל פעם שאפליקציה זו נפתחת?");
+        builder.setPositiveButton(isMouseEnabled ? "כבה עכבר לאפליקציה זו" : "הפעל עכבר לאפליקציה זו", (dialog, which) -> {
+            sharedPreferences.edit().putBoolean(appItem.packageName, !isMouseEnabled).apply();
+            Toast.makeText(this, "ההגדרה נשמרה בהצלחה", Toast.LENGTH_SHORT).show();
+        });
+        builder.setNegativeButton("סגור", null);
+        builder.show();
+    }
+
     public void showWidgetContextMenu(View anchorView) {
-        PopupMenu popup = new PopupMenu(this, anchorView);
+        PopupMenu popup = createPurplePopupMenu(anchorView);
         popup.getMenu().add(0, 10, 0, "הסר ווידג'ט נוכחי");
         popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש");
-        popup.getMenu().add(0, 12, 2, "שייך מקש לכפתור בווידג'ט 🕵️‍♂️"); // החיבור החכם ל-WidgetKeyController
+        popup.getMenu().add(0, 12, 2, "שייך מקש לכפתור בווידג'ט 🕵️‍♂️"); 
         popup.getMenu().add(0, 2, 3, "ביטול");
 
         popup.setOnMenuItemClickListener(item -> {
@@ -339,13 +457,14 @@ public class MainActivity extends Activity {
                     try {
                         widgetHost.deleteAppWidgetId(currentWidgetId);
                     } catch (Exception e) { /* הגנה */ }
+                    
                     currentWidgetId = -1;
+                    getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", -1).apply();
                 }
                 Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
             } else if (itemId == 11) {
                 selectWidget();
             } else if (itemId == 12) {
-                // קריאה למנגנון הבלשי שיזמת
                 WidgetKeyController.showWidgetBindingDialog(this);
             }
             return true;
@@ -432,7 +551,7 @@ public class MainActivity extends Activity {
         builder.setView(dialogView);
 
         TextView folderTitle = dialogView.findViewById(R.id.folder_title);
-        folderTitle.setText(folderItem.title);
+        folderTitle.setText(folderItem.customTitle != null ? folderItem.customTitle : folderItem.title);
 
         RecyclerView folderRecyclerView = dialogView.findViewById(R.id.folder_recycler_view);
         folderRecyclerView.setLayoutManager(new GridLayoutManager(this, 3));
@@ -457,11 +576,9 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // --- תפיסת המקש עבור מנהל הווידג'טים הייעודי ---
         if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
-            return true; // פקודת הווידג'ט טופלה בהצלחה, עצור כאן.
+            return true; 
         }
-        // ------------------------------------------------
 
         if (openFolderDialog == null && shortcutPositionsMap.containsKey(keyCode)) {
             int targetPosition = shortcutPositionsMap.get(keyCode);
@@ -474,35 +591,39 @@ public class MainActivity extends Activity {
             }
         }
 
-        // שינוי הגדרת העכבר עבור חבילת הלאנצ'ר עצמו
+        // ז) שינוי הגדרת העכבר של הלאנצ'ר + הפעלה מחדש מיידית בלחיצה על מקש חיוג (CALL)
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             try {
-                // שימוש בשם החבילה הנוכחי של האפליקציה הזו (הלאנצ'ר)
                 String launcherPackage = getPackageName();
-
-                // קריאת רשימת ה-mouse_support_list הנוכחית של המערכת
                 String currentList = android.provider.Settings.Global.getString(getContentResolver(), "mouse_support_list");
                 if (currentList == null) currentList = "";
 
                 String newList;
                 if (currentList.contains(launcherPackage)) {
-                    // אם הלאנצ'ר כבר רשום - נסיר אותו (ביטול עכבר במסך הבית)
                     newList = currentList.replace(launcherPackage + ",", "");
-                    Toast.makeText(this, "עכבר בוטל עבור הלאנצ'ר", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "העכבר מבוטל. הלאנצ'ר קם מחדש...", Toast.LENGTH_SHORT).show();
                 } else {
-                    // אם הוא לא רשום - נוסיף אותו לרשימה הגלובלית עם פסיק מפריד בסוף
                     newList = currentList.endsWith(",") || currentList.isEmpty() ? 
                               currentList + launcherPackage + "," : 
                               currentList + "," + launcherPackage + ",";
-                    Toast.makeText(this, "עכבר הופעל עבור הלאנצ'ר", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "העכבר מופעל! הלאנצ'ר קם מחדש...", Toast.LENGTH_SHORT).show();
                 }
 
-                // דחיפת הרשימה המעודכנת חזרה לטבלה הגלובלית של ה-Duoqin באמצעות פקודת רוט
                 String cmd = "settings put global mouse_support_list \"" + newList + "\"";
                 Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
 
+                // הפעלה מחדש אוטומטית של הלאנצ'ר עצמו כדי להחיל את השינוי ברגע זה
+                new Handler().postDelayed(() -> {
+                    Intent restartIntent = getBaseContext().getPackageManager().getLaunchIntentForPackage(getBaseContext().getPackageName());
+                    if (restartIntent != null) {
+                        restartIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(restartIntent);
+                        Runtime.getRuntime().exec(new String[]{"su", "-c", "pkill -f " + getPackageName()});
+                    }
+                }, 500);
+
             } catch (Exception e) {
-                Toast.makeText(this, "שגיאה בשינוי הגדרת העכבר של הלאנצ'ר", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "שגיאה בשינוי ההגדרה והפעלה מחדש", Toast.LENGTH_SHORT).show();
             }
             return true;
         }
@@ -525,10 +646,34 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == RESULT_OK && data != null && requestCode == REQUEST_PICK_WIDGET) {
-            currentWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-            if (widgetManager != null) {
-                createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+        if (resultCode == RESULT_OK && data != null) {
+            if (requestCode == REQUEST_PICK_WIDGET) {
+                currentWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+                
+                // ו) שמירה של ה-ID של הווידג'ט בזיכרון המכשיר לטווח ארוך
+                getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
+                
+                if (widgetManager != null) {
+                    createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                }
+            }
+            // קבלת כתובות תמונות מהגלריה עבור אייקונים מותאמים
+            else if (requestCode >= 300) { // עריכת אפליקציה
+                int index = requestCode - 300;
+                if (index < launcherItems.size() && launcherItems.get(index) instanceof AppItem) {
+                    ((AppItem) launcherItems.get(index)).customIconUri = data.getData().toString();
+                    saveLauncherState();
+                    adapter.notifyDataSetChanged();
+                }
+            } else if (requestCode >= 200) { // עריכת תיקייה
+                int index = requestCode - 200;
+                if (index < launcherItems.size() && launcherItems.get(index) instanceof FolderItem) {
+                    FolderItem folder = (FolderItem) launcherItems.get(index);
+                    folder.customIconPath = data.getData().toString();
+                    folder.useFirstAppIcon = false;
+                    saveLauncherState();
+                    adapter.notifyDataSetChanged();
+                }
             }
         }
     }
