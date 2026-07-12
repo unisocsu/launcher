@@ -1,6 +1,7 @@
 package com.example.keylauncher;
 
 import android.content.Context;
+import android.content.Intent; // ייבוא חיוני שנשמט וגרם לשגיאה האחרונה
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -36,14 +37,13 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
         MainActivity.LauncherItem item = items.get(position);
         PackageManager pm = context.getPackageManager();
 
-        // קביעת הכותרת (טקסט מותאם אישית או ברירת מחדל)
+        // קביעת הכותרת
         holder.textView.setText(item.customTitle != null ? item.customTitle : item.title);
 
         if (item.isFolder()) {
             MainActivity.FolderItem folder = (MainActivity.FolderItem) item;
             
             if (folder.useFirstAppIcon && !folder.appsInside.isEmpty()) {
-                // שימוש באייקון של האפליקציה הראשונה בתיקייה
                 try {
                     Drawable icon = pm.getApplicationIcon(folder.appsInside.get(0).packageName);
                     holder.imageView.setImageDrawable(icon);
@@ -51,7 +51,6 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
                     holder.imageView.setImageResource(android.R.drawable.ic_menu_save);
                 }
             } else if (folder.customIconPath != null) {
-                // טעינת אייקון מותאם אישית מהגלריה לתיקייה
                 try {
                     InputStream inputStream = context.getContentResolver().openInputStream(Uri.parse(folder.customIconPath));
                     Drawable drawable = Drawable.createFromStream(inputStream, folder.customIconPath);
@@ -60,7 +59,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
                     holder.imageView.setImageResource(android.R.drawable.ic_menu_save);
                 }
             } else {
-                // שימוש באייקון מובנה תקין של המערכת כדי למנוע קריסה בשל קובץ חסר
+                // שימוש באייקון מערכת מובנה במקום ic_folder החסר כדי למנוע שגיאות קומפילציה
                 holder.imageView.setImageResource(android.R.drawable.ic_menu_save);
             }
 
@@ -79,7 +78,6 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             MainActivity.AppItem app = (MainActivity.AppItem) item;
 
             if (app.customIconUri != null) {
-                // טעינת אייקון מותאם אישית לאפליקציה
                 try {
                     InputStream inputStream = context.getContentResolver().openInputStream(Uri.parse(app.customIconUri));
                     Drawable drawable = Drawable.createFromStream(inputStream, app.customIconUri);
@@ -92,7 +90,6 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
                     }
                 }
             } else {
-                // אייקון ברירת מחדל של האפליקציה מהמערכת
                 try {
                     Drawable icon = pm.getApplicationIcon(app.packageName);
                     holder.imageView.setImageDrawable(icon);
@@ -116,7 +113,6 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             });
         }
 
-        // פתיחת תפריט הקשר בלחיצה ארוכה
         holder.itemView.setOnLongClickListener(v -> {
             if (context instanceof MainActivity) {
                 ((MainActivity) context).showContextMenu(v, position);
