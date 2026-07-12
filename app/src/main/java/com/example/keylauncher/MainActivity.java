@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         
         setContentView(R.layout.activity_main);
 
-        SharedPreferences sharedPreferences = getGetSharedPreferences();
+        SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
         for (int i = 0; i <= 9; i++) {
             int androidKeyCode = KeyEvent.KEYCODE_0 + i;
             int savedPos = sharedPreferences.getInt("shortcut_pos_" + androidKeyCode, -1);
@@ -173,10 +173,6 @@ public class MainActivity extends Activity {
 
         adapter = new LauncherAdapter(this, launcherItems);
         recyclerView.setAdapter(adapter);
-    }
-
-    private SharedPreferences getGetSharedPreferences() {
-        return getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
     }
 
     private void startTimeUpdate() {
@@ -255,7 +251,7 @@ public class MainActivity extends Activity {
     }
 
     public void saveLauncherState() {
-        SharedPreferences sharedPreferences = getGetSharedPreferences();
+        SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         Gson gson = new Gson();
         editor.putString("launcher_structure", gson.toJson(launcherItems));
@@ -263,7 +259,7 @@ public class MainActivity extends Activity {
     }
 
     private boolean loadLauncherState() {
-        SharedPreferences sharedPreferences = getGetSharedPreferences();
+        SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
         String jsonText = sharedPreferences.getString("launcher_structure", null);
         if (jsonText == null || jsonText.isEmpty()) return false;
 
@@ -453,7 +449,7 @@ public class MainActivity extends Activity {
                     } catch (Exception e) { /* הגנה */ }
                     
                     currentWidgetId = -1;
-                    getGetSharedPreferences().edit().putInt("saved_widget_id", -1).apply();
+                    getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", -1).apply();
                 }
                 Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
             } else if (itemId == 11) {
@@ -479,7 +475,7 @@ public class MainActivity extends Activity {
                 
                 shortcutPositionsMap.put(androidKeyCode, position);
                 
-                SharedPreferences sharedPreferences = getGetSharedPreferences();
+                SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
                 sharedPreferences.edit().putInt("shortcut_pos_" + androidKeyCode, position).apply();
                 
                 Toast.makeText(this, "המקש " + targetDigit + " הוגדר למיקום " + position, Toast.LENGTH_SHORT).show();
@@ -568,7 +564,6 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
-        // תיקון: מחיקת ה-xxxx ושחזור הלוגיקה המקורית והתקנית בצורה נקייה
         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
             WidgetKeyController.startActiveListening(this, keyCode);
             return true;
@@ -656,7 +651,7 @@ public class MainActivity extends Activity {
         if (resultCode == RESULT_OK && data != null) {
             if (requestCode == REQUEST_PICK_WIDGET) {
                 currentWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-                getGetSharedPreferences().edit().putInt("saved_widget_id", currentWidgetId).apply();
+                getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
                 if (widgetManager != null) {
                     createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
                 }
