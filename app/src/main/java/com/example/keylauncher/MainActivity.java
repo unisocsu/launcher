@@ -300,12 +300,14 @@ public class MainActivity extends Activity {
         }
     }
 
-    private PopupMenu createPurplePopupMenu(View anchorView) {
-        return new PopupMenu(this, anchorView);
+    // תפריט מעוצב פשוט מבלי לשבור או לשנות את הטרגוט והפוקוס המקוריים
+    private PopupMenu createStyledPopupMenu(View anchorView) {
+        Context wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_Light_DialogWhenLarge);
+        return new PopupMenu(wrapper, anchorView);
     }
 
     public void showContextMenu(View anchorView, int position) {
-        PopupMenu popup = createPurplePopupMenu(anchorView);
+        PopupMenu popup = createStyledPopupMenu(anchorView);
         
         LauncherItem selectedItem = (currentlyOpenFolderItem != null) ? 
                 currentlyOpenFolderItem.appsInside.get(position) : launcherItems.get(position);
@@ -417,24 +419,60 @@ public class MainActivity extends Activity {
         builder.show();
     }
 
+    // הגדרת עכבר ייעודית לכל אפליקציה דרך ה-Root וההגדרות הגלובליות בדיוק כמו בקוד המקור שלך
     private void showAppMouseConfigDialog(AppItem appItem) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("הגדרת עכבר עבור: " + appItem.title);
         
-        SharedPreferences sharedPreferences = getSharedPreferences("AppMousePrefs", MODE_PRIVATE);
-        boolean isMouseEnabled = sharedPreferences.getBoolean(appItem.packageName, false);
+        try {
+            String currentList = android.provider.Settings.Global.getString(getContentResolver(), "mouse_support_list");
+            if (currentList == null) currentList = "";
+            
+            final boolean isCurrentlyEnabled = currentList.contains(appItem.packageName);
+            builder.setMessage(isCurrentlyEnabled ? "תמיכת עכבר כרגע מופעלת עבור יישום זה. האם תרצה לכבות אותה?" : "תמיכת עכבר כרגע כבויה עבור יישום זה. האם תרצה להפעיל אותה?");
+            
+            final String finalCurrentList = currentList;
+            builder.setPositiveButton(isCurrentlyEnabled ? "כבה עכבר" : "הפעל עכבר", (dialog, which) -> {
+                try {
+                    String newList;
+                    if (isCurrentlyEnabled) {
+                        newList = finalCurrentList.replace(appItem.packageName + ",", "");
+                    } else {
+                        newList = finalCurrentList.endsWith(",") || finalCurrentList.isEmpty() ? 
+                                  finalCurrentList + appItem.packageName + "," : 
+                                  finalCurrentList + "," + appItem.packageName + ",";
+                    }
+                    
+                    String cmd = "settings put global mouse_support_list \"" + newList + "\"";
+                    Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                    Toast.makeText(this, "ההגדרה עודכנה במערכת!", Toast.LENGTH_SHORT).show();
+                    
+                    // אתחול קל של הלאנצ'ר להחלת השינויים
+                    new Handler().postDelayed(() -> {
+                        try {
+                            Intent restartIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+                            if (restartIntent != null) {
+                                restartIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(restartIntent);
+                                Runtime.getRuntime().exec(new String[]{"su", "-c", "pkill -f " + getPackageName()});
+                            }
+                        } catch (Exception e) {}
+                    }, 400);
 
-        builder.setMessage("האם להפעיל תמיכת עכבר אוטומטית בכל פעם שאפליקציה זו נפתחת?");
-        builder.setPositiveButton(isMouseEnabled ? "כבה עכבר לאפליקציה זו" : "הפעל עכבר לאפליקציה זו", (dialog, which) -> {
-            sharedPreferences.edit().putBoolean(appItem.packageName, !isMouseEnabled).apply();
-            Toast.makeText(this, "ההגדרה נשמרה בהצלחה", Toast.LENGTH_SHORT).show();
-        });
+                } catch (Exception e) {
+                    Toast.makeText(this, "שגיאה בביצוע פקודת המערכת", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } catch (Exception e) {
+            builder.setMessage("לא ניתן לגשת להגדרות המערכת במכשיר זה.");
+        }
+        
         builder.setNegativeButton("סגור", null);
         builder.show();
     }
 
     public void showWidgetContextMenu(View anchorView) {
-        PopupMenu popup = createPurplePopupMenu(anchorView);
+        PopupMenu popup = createStyledPopupMenu(anchorView);
         popup.getMenu().add(0, 10, 0, "הסר ווידג'ט נוכחי");
         popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש");
         popup.getMenu().add(0, 2, 2, "ביטול");
@@ -582,14 +620,21 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        // תיקון קריטי: הפעלת הפעולה ישירות מתוך רשימת הנתונים במקום לחפש ViewHolder גרפי שאולי לא קיים כרגע במסך
         if (openFolderDialog == null && shortcutPositionsMap.containsKey(keyCode)) {
             int targetPosition = shortcutPositionsMap.get(keyCode);
-            if (recyclerView != null && recyclerView.getAdapter() != null && targetPosition < recyclerView.getAdapter().getItemCount()) {
-                RecyclerView.ViewHolder holder = recyclerView.findViewHolderForAdapterPosition(targetPosition);
-                if (holder != null) {
-                    holder.itemView.performClick();
-                    return true;
+            if (targetPosition >= 0 && targetPosition < launcherItems.size()) {
+                LauncherItem item = launcherItems.get(targetPosition);
+                if (item.isFolder()) {
+                    openFolder((FolderItem) item);
+                } else {
+                    AppItem app = (AppItem) item;
+                    Intent launchIntent = getPackageManager().getLaunchIntentForPackage(app.packageName);
+                    if (launchIntent != null) {
+                        startActivity(launchIntent);
+                    }
                 }
+                return true;
             }
         }
 
@@ -615,7 +660,7 @@ public class MainActivity extends Activity {
 
                 new Handler().postDelayed(() -> {
                     try {
-                        Intent restartIntent = getBaseContext().getPackageManager().getLaunchIntentForPackage(getBaseContext().getPackageName());
+                        Intent restartIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
                         if (restartIntent != null) {
                             restartIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                             startActivity(restartIntent);
