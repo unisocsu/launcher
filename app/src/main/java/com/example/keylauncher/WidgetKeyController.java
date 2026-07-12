@@ -32,9 +32,9 @@ public class WidgetKeyController {
                 // מנקים לוגים קודמים כדי לא לקרוא זבל מהעבר
                 Runtime.getRuntime().exec(new String[]{"su", "-c", "logcat -c"});
                 
-                // האזנה רציפה ורחבה יותר לכל מה שקשור לשידורי מערכת ופעילויות
+                // תיקון: האזנה רציפה ורחבה לכל הודעות המידע (Info) ללא חסימות אגרסיביות שפוסלות אנדרואיד ישן
                 Process process = Runtime.getRuntime().exec(new String[]{
-                    "su", "-c", "logcat -b system -b main ActivityManager:I Intent:I *:S"
+                    "su", "-c", "logcat -b system -b main *:I"
                 });
 
                 BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -46,7 +46,7 @@ public class WidgetKeyController {
                     if (reader.ready() && (line = reader.readLine()) != null) {
                         
                         // מחפשים פקודות שידור רחבות (Intents / Component / Broadcasts)
-                        if (line.contains("act=") || line.contains("cmp=") || line.contains("PendingIntent") || line.contains("flg=")) {
+                        if (line.contains("act=") || line.contains("cmp=") || line.contains("Intent {") || line.contains("PendingIntent")) {
                             String extractedAction = parseActionFromLogLine(line);
                             
                             if (extractedAction != null && !extractedAction.contains("keylauncher")) { // מתעלמים מהלאנצ'ר עצמו
@@ -64,7 +64,7 @@ public class WidgetKeyController {
                             }
                         }
                     }
-                    Thread.sleep(100);
+                    Thread.sleep(50); // קיצור זמן השינה מ-100 ל-50 לתגובתיות מהירה יותר באנדרואיד ישן
                 }
 
                 if (isListening) { // אם עברו 15 שניות ולא נתפס כלום
@@ -111,7 +111,7 @@ public class WidgetKeyController {
                 if (end == -1) end = line.indexOf(")", start);
                 if (end != -1) return line.substring(start, end).trim();
             }
-            // פורמט 3: גיבוי כללי למבני לוג ישנים של אנדרואיד
+            // פורמט 3: התאמה מיוחדת למבני לוג ישנים (כמו ה-Spreadtrum)
             if (line.contains("Intent {")) {
                 int start = line.indexOf("Intent {") + 8;
                 int end = line.indexOf("}", start);
@@ -119,7 +119,8 @@ public class WidgetKeyController {
                     String sub = line.substring(start, end);
                     String[] parts = sub.split(" ");
                     for (String part : parts) {
-                        if (!part.contains("=") && part.contains(".")) {
+                        // אם יש איבר שמכיל נקודות (חבילה) ואין בו סימן שווה, הוא כנראה ה-Action באנדרואיד ישן
+                        if (!part.contains("=") && part.contains(".") && part.length() > 5) {
                             return part.trim();
                         }
                     }
