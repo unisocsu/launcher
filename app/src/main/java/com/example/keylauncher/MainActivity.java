@@ -68,7 +68,6 @@ public class MainActivity extends Activity {
 
     private int currentWidgetId = -1;
     
-    // משתני עזר זמניים כדי לדעת איזה פריט מעדכנים כעת מול ה-Gallery Activity
     private AppItem appItemEditingNow = null;
     private FolderItem folderItemEditingNow = null;
 
@@ -306,18 +305,15 @@ public class MainActivity extends Activity {
     }
 
     private PopupMenu createPurplePopupMenu(View anchorView) {
-        // מונע את שגיאת הקומפילציה הקודמת על ידי יצירה פשוטה וישירה
         return new PopupMenu(this, anchorView);
     }
 
     public void showContextMenu(View anchorView, int position) {
         PopupMenu popup = createPurplePopupMenu(anchorView);
         
-        // תיקון: שליפת הפריט הנכון אם הפעולה מבוצעת מתוך תיקייה פתוחה
         LauncherItem selectedItem = (currentlyOpenFolderItem != null) ? 
                 currentlyOpenFolderItem.appsInside.get(position) : launcherItems.get(position);
 
-        // תפריט כללי רק אם לא מתוך תיקייה
         if (currentlyOpenFolderItem == null) {
             popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
             if (!selectedItem.isFolder()) {
@@ -383,7 +379,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "הוגדר אייקון האפליקציה הראשונה", Toast.LENGTH_SHORT).show();
                 refreshViews();
             } else if (which == 1) {
-                folderItemEditingNow = folder; // שמירת המצביע לתיקייה הנוכחית
+                folderItemEditingNow = folder; 
                 Intent intent = new Intent(Intent.ACTION_PICK);
                 intent.setType("image/*");
                 startActivityForResult(Intent.createChooser(intent, "בחר תמונה לאייקון"), REQUEST_PICK_FOLDER_ICON);
@@ -415,7 +411,7 @@ public class MainActivity extends Activity {
         });
         
         builder.setNeutralButton("החלף אייקון מהגלריה", (dialog, which) -> {
-            appItemEditingNow = appItem; // שמירת המצביע לאפליקציה שמערכת היחסים שלה משתנה כעת
+            appItemEditingNow = appItem; 
             Intent intent = new Intent(Intent.ACTION_PICK);
             intent.setType("image/*");
             startActivityForResult(Intent.createChooser(intent, "בחר אייקון"), REQUEST_PICK_APP_ICON);
@@ -572,6 +568,7 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
+        // תיקון: מחיקת ה-xxxx ושחזור הלוגיקה המקורית והתקנית בצורה נקייה
         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
             WidgetKeyController.startActiveListening(this, keyCode);
             return true;
@@ -664,31 +661,26 @@ public class MainActivity extends Activity {
                     createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
                 }
             }
-            // תיקון יסודי: קבלת האייקון החדש ישירות לפי המשתנה הזמני ששמרנו ללא תלות באינדקסים שגויים
             else if (requestCode == REQUEST_PICK_APP_ICON && appItemEditingNow != null) { 
                 appItemEditingNow.customIconUri = data.getData().toString();
-                appItemEditingNow = null; // ניקוי
+                appItemEditingNow = null; 
                 saveLauncherState();
                 refreshViews();
             } 
             else if (requestCode == REQUEST_PICK_FOLDER_ICON && folderItemEditingNow != null) { 
                 folderItemEditingNow.customIconPath = data.getData().toString();
                 folderItemEditingNow.useFirstAppIcon = false;
-                folderItemEditingNow = null; // ניקוי
+                folderItemEditingNow = null; 
                 saveLauncherState();
                 refreshViews();
             }
         }
     }
 
-    /**
-     * פונקציית עזר מרכזית לריענון חכם של כל התצוגות (המסך הראשי והתיקייה הפתוחה במידה וקיימת)
-     */
     private void refreshViews() {
         if (adapter != null) {
             adapter.notifyDataSetChanged();
         }
-        // אם יש תיקייה פתוחה כרגע - נסגור ונפתח אותה מהר ברקע כדי שהשינויים ישתקפו בפנים מיידית
         if (openFolderDialog != null && currentlyOpenFolderItem != null) {
             FolderItem folder = currentlyOpenFolderItem;
             openFolderDialog.dismiss();
