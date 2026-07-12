@@ -26,6 +26,7 @@ import android.widget.PopupMenu;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import android.view.ContextThemeWrapper;
+import android.os.Vibrator;
 
 import android.appwidget.AppWidgetHost;
 import android.appwidget.AppWidgetHostView;
@@ -121,9 +122,6 @@ public class MainActivity extends Activity {
         
         setContentView(R.layout.activity_main);
 
-        // הפעלת שירות ההאזנה ברקע לפעילות ווידג'טים
-        WidgetKeyController.startBackgroundListener(this);
-
         SharedPreferences sharedPreferences = getGetSharedPreferences();
         for (int i = 0; i <= 9; i++) {
             int androidKeyCode = KeyEvent.KEYCODE_0 + i;
@@ -197,6 +195,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         timeHandler.removeCallbacks(timeRunnable);
+        WidgetKeyController.stopListening();
     }
 
     private void loadLauncherItems() {
@@ -437,16 +436,7 @@ public class MainActivity extends Activity {
         PopupMenu popup = createPurplePopupMenu(anchorView);
         popup.getMenu().add(0, 10, 0, "הסר ווידג'ט נוכחי");
         popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש");
-        
-        // קריאת הפעולה האחרונה שנרשמה ברקע על ידי ה-Controller
-        final String lastAction = WidgetKeyController.getLastDetectedAction(this);
-        if (lastAction != null) {
-            popup.getMenu().add(0, 12, 2, "שייך מקש לפעולה האחרונה (" + shortenActionName(lastAction) + ") 🕵️‍♂️");
-        } else {
-            popup.getMenu().add(0, 12, 2, "לא זוהתה פעילות ווידג'ט עדיין");
-        }
-        
-        popup.getMenu().add(0, 2, 3, "ביטול");
+        popup.getMenu().add(0, 2, 2, "ביטול");
 
         popup.setOnMenuItemClickListener(item -> {
             int itemId = item.getItemId();
@@ -463,48 +453,10 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
             } else if (itemId == 11) {
                 selectWidget();
-            } else if (itemId == 12 && lastAction != null) {
-                showKeyAssignmentDialog(lastAction);
             }
             return true;
         });
         popup.show();
-    }
-
-    private void showKeyAssignmentDialog(String actionToBind) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("שיוך מקש מהיר לווידג'ט");
-        builder.setMessage("לחץ על ספרה (0-9) כדי לשייך אותה לפעולה:\n" + actionToBind);
-        
-        final EditText input = new EditText(this);
-        input.setHint("הכנס ספרה אחת ולחץ אישור");
-        builder.setView(input);
-
-        builder.setPositiveButton("שמור שיוך", (dialog, which) -> {
-            String keyStr = input.getText().toString().trim();
-            if (!keyStr.isEmpty() && Character.isDigit(keyStr.charAt(0))) {
-                int targetDigit = Character.getNumericValue(keyStr.charAt(0));
-                int androidKeyCode = KeyEvent.KEYCODE_0 + targetDigit;
-                
-                WidgetKeyController.saveBinding(this, androidKeyCode, actionToBind);
-                Toast.makeText(this, "המקש " + targetDigit + " שויך בהצלחה לפעולת הווידג'ט!", Toast.LENGTH_LONG).show();
-            } else {
-                Toast.makeText(this, "קלט לא תקין, השיוך בוטל", Toast.LENGTH_SHORT).show();
-            }
-        });
-        builder.setNegativeButton("ביטול", null);
-        builder.show();
-    }
-
-    private String shortenActionName(String fullAction) {
-        if (fullAction == null) return "";
-        if (fullAction.contains(".")) {
-            return fullAction.substring(fullAction.lastIndexOf(".") + 1);
-        }
-        if (fullAction.contains("/")) {
-            return fullAction.substring(fullAction.lastIndexOf("/") + 1);
-        }
-        return fullAction;
     }
 
     private void showShortcutKeyDialog(int position) {
@@ -610,9 +562,32 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public boolean onKeyLongPress(int keyCode, KeyEvent event) {
+        // אם המשתמש לחץ ארוך על ספרה כלשהי (0-9)
+        if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
+            try {
+                Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                if (vibrator != null) vibrator.vibrate(100); // הרעדה זריזה לאישור קבלת הפקודה
+            } catch (Exception e) {}
+            
+            // הפעלת מצב האזנה מונחה-לוגים ממוקד
+            WidgetKeyController.startActiveListening(this, keyCode);
+            return true;
+        }
+        return super.onKeyLongPress(keyCode, event);
+    }
+
+    @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        // קודם כל בודקים אם המקש משויך לפעולת ווידג'ט
         if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
             return true; 
+        }
+
+        // הכנה של אירוע הלחיצה הארוכה
+        if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
+            event.startTracking();
+            return true;
         }
 
         if (openFolderDialog == null && shortcutPositionsMap.containsKey(keyCode)) {
