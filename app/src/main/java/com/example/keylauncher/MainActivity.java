@@ -1,7 +1,6 @@
 package com.example.keylauncher;
 
 import org.json.JSONArray;
-import com.example.keylauncher.WidgetKeyController;
 import org.json.JSONObject;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -20,21 +19,17 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.PopupMenu;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import android.view.ContextThemeWrapper;
-import android.os.Vibrator;
-
-import android.appwidget.AppWidgetHost;
-import android.appwidget.AppWidgetHostView;
 import android.appwidget.AppWidgetManager;
+import android.appwidget.AppWidgetHost;
 import android.appwidget.AppWidgetProviderInfo;
-
+import android.appwidget.AppWidgetHostView;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.GridLayoutManager;
 import com.google.gson.Gson;
-
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -59,6 +54,8 @@ public class MainActivity extends Activity {
 
     private static final int HOST_ID = 1024;
     private static final int REQUEST_PICK_WIDGET = 1;
+    private static final int REQUEST_PICK_APP_ICON = 300;
+    private static final int REQUEST_PICK_FOLDER_ICON = 200;
     
     private AppWidgetManager widgetManager;
     private AppWidgetHost widgetHost;
@@ -71,6 +68,10 @@ public class MainActivity extends Activity {
 
     private int currentWidgetId = -1;
     
+    // משתני עזר זמניים כדי לדעת איזה פריט מעדכנים כעת מול ה-Gallery Activity
+    private AppItem appItemEditingNow = null;
+    private FolderItem folderItemEditingNow = null;
+
     private Map<Integer, Integer> shortcutPositionsMap = new HashMap<>();
 
     public static abstract class LauncherItem {
@@ -305,20 +306,25 @@ public class MainActivity extends Activity {
     }
 
     private PopupMenu createPurplePopupMenu(View anchorView) {
-        ContextThemeWrapper wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_Dialog);
-        return new PopupMenu(wrapper, anchorView);
+        // מונע את שגיאת הקומפילציה הקודמת על ידי יצירה פשוטה וישירה
+        return new PopupMenu(this, anchorView);
     }
 
     public void showContextMenu(View anchorView, int position) {
         PopupMenu popup = createPurplePopupMenu(anchorView);
-        LauncherItem selectedItem = (openFolderDialog != null && currentlyOpenFolderItem != null) ? 
+        
+        // תיקון: שליפת הפריט הנכון אם הפעולה מבוצעת מתוך תיקייה פתוחה
+        LauncherItem selectedItem = (currentlyOpenFolderItem != null) ? 
                 currentlyOpenFolderItem.appsInside.get(position) : launcherItems.get(position);
 
-        popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
-        if (!selectedItem.isFolder()) {
-            popup.getMenu().add(0, 8, 1, "העתק / שכפל למיקום אחר");
+        // תפריט כללי רק אם לא מתוך תיקייה
+        if (currentlyOpenFolderItem == null) {
+            popup.getMenu().add(0, 1, 0, "העבר מיקום / מזג לתיקייה");
+            if (!selectedItem.isFolder()) {
+                popup.getMenu().add(0, 8, 1, "העתק / שכפל למיקום אחר");
+            }
+            popup.getMenu().add(0, 9, 2, "הגדר מקש קיצור מהיר למיקום");
         }
-        popup.getMenu().add(0, 9, 2, "הגדר מקש קיצור מהיר למיקום");
         
         if (!selectedItem.isFolder()) {
             popup.getMenu().add(0, 20, 3, "ערוך שם ואייקון אפליקציה ✏️");
@@ -354,8 +360,8 @@ public class MainActivity extends Activity {
                 showFolderIconConfigDialog((FolderItem) selectedItem);
             } else if (id == 6) {
                 try {
-                    Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + ((AppItem)selectedItem).packageName));
-                    startActivity(intent);
+                    Intent uninstallIntent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + ((AppItem)selectedItem).packageName));
+                    startActivity(uninstallIntent);
                 } catch (Exception e) {
                     Toast.makeText(this, "לא ניתן להסיר את האפליקציה", Toast.LENGTH_SHORT).show();
                 }
@@ -375,16 +381,18 @@ public class MainActivity extends Activity {
                 folder.useFirstAppIcon = true;
                 folder.customIconPath = null;
                 Toast.makeText(this, "הוגדר אייקון האפליקציה הראשונה", Toast.LENGTH_SHORT).show();
+                refreshViews();
             } else if (which == 1) {
+                folderItemEditingNow = folder; // שמירת המצביע לתיקייה הנוכחית
                 Intent intent = new Intent(Intent.ACTION_PICK);
                 intent.setType("image/*");
-                startActivityForResult(Intent.createChooser(intent, "בחר תמונה לאייקון"), 200 + launcherItems.indexOf(folder));
+                startActivityForResult(Intent.createChooser(intent, "בחר תמונה לאייקון"), REQUEST_PICK_FOLDER_ICON);
             } else {
                 folder.useFirstAppIcon = false;
                 folder.customIconPath = null;
+                refreshViews();
             }
             saveLauncherState();
-            adapter.notifyDataSetChanged();
         });
         builder.show();
     }
@@ -402,14 +410,15 @@ public class MainActivity extends Activity {
             if (!newName.isEmpty()) {
                 appItem.customTitle = newName;
                 saveLauncherState();
-                adapter.notifyDataSetChanged();
+                refreshViews();
             }
         });
         
         builder.setNeutralButton("החלף אייקון מהגלריה", (dialog, which) -> {
+            appItemEditingNow = appItem; // שמירת המצביע לאפליקציה שמערכת היחסים שלה משתנה כעת
             Intent intent = new Intent(Intent.ACTION_PICK);
             intent.setType("image/*");
-            startActivityForResult(Intent.createChooser(intent, "בחר אייקון"), 300 + launcherItems.indexOf(appItem));
+            startActivityForResult(Intent.createChooser(intent, "בחר אייקון"), REQUEST_PICK_APP_ICON);
         });
 
         builder.setNegativeButton("ביטול", null);
@@ -493,8 +502,8 @@ public class MainActivity extends Activity {
             String newName = input.getText().toString().trim();
             if (!newName.isEmpty()) {
                 folder.title = newName;
-                adapter.notifyDataSetChanged();
                 saveLauncherState();
+                refreshViews();
             }
         });
         builder.show();
@@ -518,7 +527,7 @@ public class MainActivity extends Activity {
             if (!isCopyOperation) launcherItems.remove(pendingMovePosition);
             launcherItems.set(targetPosition, newFolder);
         }
-        adapter.notifyDataSetChanged();
+        refreshViews();
         saveLauncherState(); 
         cancelMoveMode();
     }
@@ -563,14 +572,7 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
-        // אם המשתמש לחץ ארוך על ספרה כלשהי (0-9)
         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
-            try {
-                Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-                if (vibrator != null) vibrator.vibrate(100); // הרעדה זריזה לאישור קבלת הפקודה
-            } catch (Exception e) {}
-            
-            // הפעלת מצב האזנה מונחה-לוגים ממוקד
             WidgetKeyController.startActiveListening(this, keyCode);
             return true;
         }
@@ -579,12 +581,10 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // קודם כל בודקים אם המקש משויך לפעולת ווידג'ט
         if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
             return true; 
         }
 
-        // הכנה של אירוע הלחיצה הארוכה
         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
             event.startTracking();
             return true;
@@ -664,23 +664,35 @@ public class MainActivity extends Activity {
                     createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
                 }
             }
-            else if (requestCode >= 300) { 
-                int index = requestCode - 300;
-                if (index < launcherItems.size() && launcherItems.get(index) instanceof AppItem) {
-                    ((AppItem) launcherItems.get(index)).customIconUri = data.getData().toString();
-                    saveLauncherState();
-                    adapter.notifyDataSetChanged();
-                }
-            } else if (requestCode >= 200) { 
-                int index = requestCode - 200;
-                if (index < launcherItems.size() && launcherItems.get(index) instanceof FolderItem) {
-                    FolderItem folder = (FolderItem) launcherItems.get(index);
-                    folder.customIconPath = data.getData().toString();
-                    folder.useFirstAppIcon = false;
-                    saveLauncherState();
-                    adapter.notifyDataSetChanged();
-                }
+            // תיקון יסודי: קבלת האייקון החדש ישירות לפי המשתנה הזמני ששמרנו ללא תלות באינדקסים שגויים
+            else if (requestCode == REQUEST_PICK_APP_ICON && appItemEditingNow != null) { 
+                appItemEditingNow.customIconUri = data.getData().toString();
+                appItemEditingNow = null; // ניקוי
+                saveLauncherState();
+                refreshViews();
+            } 
+            else if (requestCode == REQUEST_PICK_FOLDER_ICON && folderItemEditingNow != null) { 
+                folderItemEditingNow.customIconPath = data.getData().toString();
+                folderItemEditingNow.useFirstAppIcon = false;
+                folderItemEditingNow = null; // ניקוי
+                saveLauncherState();
+                refreshViews();
             }
+        }
+    }
+
+    /**
+     * פונקציית עזר מרכזית לריענון חכם של כל התצוגות (המסך הראשי והתיקייה הפתוחה במידה וקיימת)
+     */
+    private void refreshViews() {
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+        // אם יש תיקייה פתוחה כרגע - נסגור ונפתח אותה מהר ברקע כדי שהשינויים ישתקפו בפנים מיידית
+        if (openFolderDialog != null && currentlyOpenFolderItem != null) {
+            FolderItem folder = currentlyOpenFolderItem;
+            openFolderDialog.dismiss();
+            openFolder(folder);
         }
     }
 
