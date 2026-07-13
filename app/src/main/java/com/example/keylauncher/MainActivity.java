@@ -300,9 +300,9 @@ public class MainActivity extends Activity {
         }
     }
 
-    // תפריט מעוצב פשוט מבלי לשבור או לשנות את הטרגוט והפוקוס המקוריים
+    // שיפור: יצירת תפריט צץ עם ערכת נושא כהה מובנית ומראה מלוטש
     private PopupMenu createStyledPopupMenu(View anchorView) {
-        Context wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_Light_DialogWhenLarge);
+        Context wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_InputMethod);
         return new PopupMenu(wrapper, anchorView);
     }
 
@@ -419,7 +419,6 @@ public class MainActivity extends Activity {
         builder.show();
     }
 
-    // הגדרת עכבר ייעודית לכל אפליקציה דרך ה-Root וההגדרות הגלובליות בדיוק כמו בקוד המקור שלך
     private void showAppMouseConfigDialog(AppItem appItem) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("הגדרת עכבר עבור: " + appItem.title);
@@ -447,7 +446,6 @@ public class MainActivity extends Activity {
                     Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
                     Toast.makeText(this, "ההגדרה עודכנה במערכת!", Toast.LENGTH_SHORT).show();
                     
-                    // אתחול קל של הלאנצ'ר להחלת השינויים
                     new Handler().postDelayed(() -> {
                         try {
                             Intent restartIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
@@ -611,6 +609,7 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        // שיפור לווידג'טים: העברת האירוע קודם כל לבקר הווידג'טים
         if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
             return true; 
         }
@@ -620,7 +619,6 @@ public class MainActivity extends Activity {
             return true;
         }
 
-        // תיקון קריטי: הפעלת הפעולה ישירות מתוך רשימת הנתונים במקום לחפש ViewHolder גרפי שאולי לא קיים כרגע במסך
         if (openFolderDialog == null && shortcutPositionsMap.containsKey(keyCode)) {
             int targetPosition = shortcutPositionsMap.get(keyCode);
             if (targetPosition >= 0 && targetPosition < launcherItems.size()) {
