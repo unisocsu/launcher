@@ -300,9 +300,9 @@ public class MainActivity extends Activity {
         }
     }
 
-    // שיפור: יצירת תפריט צץ עם ערכת נושא כהה מובנית ומראה מלוטש
+    // שינוי: טעינת הסטייל הסגול המותאם אישית מה-XML (PurplePopupMenu)
     private PopupMenu createStyledPopupMenu(View anchorView) {
-        Context wrapper = new ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_InputMethod);
+        Context wrapper = new ContextThemeWrapper(this, R.style.PurplePopupMenu);
         return new PopupMenu(wrapper, anchorView);
     }
 
@@ -609,7 +609,6 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // שיפור לווידג'טים: העברת האירוע קודם כל לבקר הווידג'טים
         if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
             return true; 
         }
@@ -726,12 +725,17 @@ public class MainActivity extends Activity {
         }
     }
 
+    // פותר את בעיית המגע: הגדרת מגע והעברת קליקים ישירות לתוך הווידג'ט
     private void createWidgetView(int appWidgetId, AppWidgetProviderInfo appWidgetInfo) {
         if (widgetContainer == null || appWidgetInfo == null || widgetHost == null) return;
         try {
             widgetContainer.removeAllViews();
             AppWidgetHostView hostView = widgetHost.createView(this, appWidgetId, appWidgetInfo);
             hostView.setAppWidget(appWidgetId, appWidgetInfo);
+            
+            hostView.setFocusable(true);
+            hostView.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            
             widgetContainer.addView(hostView); 
         } catch (Exception e) {
             Toast.makeText(this, "שגיאה בטעינת תצוגת הווידג'ט", Toast.LENGTH_SHORT).show();
