@@ -29,7 +29,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        // ודא ששם ה-layout כאן תואם במדויק לקובץ ה-XML שלך (item_launcher או launcher_item)
+        // ודא ששם ה-layout תואם במדויק לקובץ ה-XML שלך
         View view = LayoutInflater.from(context).inflate(R.layout.item_launcher, parent, false);
         return new ViewHolder(view);
     }
@@ -40,12 +40,25 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
         
         holder.textView.setText(item.customTitle != null ? item.customTitle : item.title);
 
-        if (mainActivity != null && mainActivity.isPickingDestination()) {
-            holder.itemView.setBackgroundColor(Color.parseColor("#44FF0000"));
-        } else {
-            holder.itemView.setBackgroundColor(Color.TRANSPARENT);
-        }
+        // --- הגדרות פוקוס וניווט מקשים קריטיות למכשירי מקשים ---
+        holder.itemView.setFocusable(true);
+        holder.itemView.setClickable(true);
 
+        // שינוי צבע הרקע בהתאם למצב (פוקוס מקשים / בחירת יעד העברה)
+        holder.itemView.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                // צבע רקע בולט (סגול שקוף למחצה) כאשר המשתמש עומד על הפריט עם המקשים
+                v.setBackgroundColor(Color.parseColor("#446200EE"));
+            } else {
+                if (mainActivity != null && mainActivity.isPickingDestination()) {
+                    v.setBackgroundColor(Color.parseColor("#44FF0000")); // סימון אדום להעברה
+                } else {
+                    v.setBackgroundColor(Color.TRANSPARENT); // החזרת הרקע לשקוף
+                }
+            }
+        });
+
+        // טעינת תמונות/אייקונים
         if (item.isFolder()) {
             MainActivity.FolderItem folder = (MainActivity.FolderItem) item;
             
@@ -58,7 +71,6 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             } else if (folder.useFirstAppIcon && !folder.appsInside.isEmpty()) {
                 loadAppIcon(folder.appsInside.get(0), holder.imageView);
             } else {
-                // שימוש באייקון גלריה מובנה שקיים ב-100% בכל גרסאות אנדרואיד
                 holder.imageView.setImageResource(android.R.drawable.ic_menu_gallery);
             }
         } else {
@@ -66,6 +78,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             loadAppIcon(app, holder.imageView);
         }
 
+        // לחיצה רגילה (עובד גם עם מקש האמצע/אישור במכשיר מקשים)
         holder.itemView.setOnClickListener(v -> {
             if (mainActivity != null && mainActivity.isPickingDestination()) {
                 mainActivity.handleDestinationSelected(position);
@@ -83,6 +96,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             }
         });
 
+        // לחיצה ארוכה (לפתיחת תפריט האפשרויות)
         holder.itemView.setOnLongClickListener(v -> {
             if (mainActivity != null) {
                 mainActivity.showContextMenu(v, position);
