@@ -11,7 +11,6 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
-import com.bumptech.glide.Glide;
 import java.util.List;
 
 public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHolder> {
@@ -30,6 +29,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+        // ודא ששם ה-layout כאן תואם במדויק לקובץ ה-XML שלך (item_launcher או launcher_item)
         View view = LayoutInflater.from(context).inflate(R.layout.item_launcher, parent, false);
         return new ViewHolder(view);
     }
@@ -38,12 +38,10 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
     public void onBindViewHolder(ViewHolder holder, int position) {
         MainActivity.LauncherItem item = items.get(position);
         
-        // הצגת השם המותאם אישית או שם ברירת המחדל
         holder.textView.setText(item.customTitle != null ? item.customTitle : item.title);
 
-        // שינוי רקע זמני אם המשתמש במצב של בחירת מיקום להעברה
         if (mainActivity != null && mainActivity.isPickingDestination()) {
-            holder.itemView.setBackgroundColor(Color.parseColor("#44FF0000")); // סימון אדום בהיר
+            holder.itemView.setBackgroundColor(Color.parseColor("#44FF0000"));
         } else {
             holder.itemView.setBackgroundColor(Color.TRANSPARENT);
         }
@@ -51,21 +49,23 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
         if (item.isFolder()) {
             MainActivity.FolderItem folder = (MainActivity.FolderItem) item;
             
-            // טעינת אייקון לתיקייה
             if (folder.customIconPath != null) {
-                Glide.with(context).load(Uri.parse(folder.customIconPath)).into(holder.imageView);
+                try {
+                    holder.imageView.setImageURI(Uri.parse(folder.customIconPath));
+                } catch (Exception e) {
+                    holder.imageView.setImageResource(android.R.drawable.ic_menu_gallery);
+                }
             } else if (folder.useFirstAppIcon && !folder.appsInside.isEmpty()) {
                 loadAppIcon(folder.appsInside.get(0), holder.imageView);
             } else {
-                // מניעת קריסה: שימוש באייקון תיקייה מערכתי מובנה של אנדרואיד במקום קובץ מקומי חסר
-                holder.imageView.setImageResource(android.R.drawable.ic_menu_archive);
+                // שימוש באייקון גלריה מובנה שקיים ב-100% בכל גרסאות אנדרואיד
+                holder.imageView.setImageResource(android.R.drawable.ic_menu_gallery);
             }
         } else {
             MainActivity.AppItem app = (MainActivity.AppItem) item;
             loadAppIcon(app, holder.imageView);
         }
 
-        // הגדרת לחיצה קצרה
         holder.itemView.setOnClickListener(v -> {
             if (mainActivity != null && mainActivity.isPickingDestination()) {
                 mainActivity.handleDestinationSelected(position);
@@ -83,7 +83,6 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             }
         });
 
-        // הגדרת לחיצה ארוכה לפתיחת תפריט האפשרויות
         holder.itemView.setOnLongClickListener(v -> {
             if (mainActivity != null) {
                 mainActivity.showContextMenu(v, position);
@@ -94,7 +93,11 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
 
     private void loadAppIcon(MainActivity.AppItem app, ImageView imageView) {
         if (app.customIconUri != null) {
-            Glide.with(context).load(Uri.parse(app.customIconUri)).into(imageView);
+            try {
+                imageView.setImageURI(Uri.parse(app.customIconUri));
+            } catch (Exception e) {
+                imageView.setImageResource(android.R.drawable.sym_def_app_icon);
+            }
         } else {
             try {
                 imageView.setImageDrawable(context.getPackageManager().getApplicationIcon(app.packageName));
