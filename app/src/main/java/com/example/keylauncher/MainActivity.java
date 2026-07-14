@@ -302,11 +302,16 @@ public class MainActivity extends Activity {
     }
 
     // הגדרת הסטייל הסגול שיצרת ב-styles.xml עבור כל התפריטים
+// יצירת תפריט מוגן - אם העיצוב הסגול נכשל, משתמש בעיצוב ברירת המחדל של המכשיר
     private PopupMenu createStyledPopupMenu(View anchorView) {
-        Context wrapper = new ContextThemeWrapper(this, R.style.PurplePopupMenu);
-        return new PopupMenu(wrapper, anchorView);
+        try {
+            Context wrapper = new ContextThemeWrapper(this, R.style.PurplePopupMenu);
+            return new PopupMenu(wrapper, anchorView);
+        } catch (Exception e) {
+            // הגנה: במקרה של תקלה בסטייל, פתח תפריט מערכת רגיל
+            return new PopupMenu(this, anchorView);
+        }
     }
-
     public void showContextMenu(View anchorView, int position) {
         PopupMenu popup = createStyledPopupMenu(anchorView);
         
