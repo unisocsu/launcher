@@ -12,7 +12,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
-import java.io.File;
 import java.util.List;
 
 public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHolder> {
@@ -39,12 +38,12 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
     public void onBindViewHolder(ViewHolder holder, int position) {
         MainActivity.LauncherItem item = items.get(position);
         
-        // הצגת השם (שם מותאם אישית או שם ברירת מחדל)
+        // הצגת השם המותאם אישית או שם ברירת המחדל
         holder.textView.setText(item.customTitle != null ? item.customTitle : item.title);
 
-        // שינוי צבע רקע זמני אם אנחנו במצב בחירת יעד להעברה
+        // שינוי רקע זמני אם המשתמש במצב של בחירת מיקום להעברה
         if (mainActivity != null && mainActivity.isPickingDestination()) {
-            holder.itemView.setBackgroundColor(Color.parseColor("#44FF0000")); // סימון אדמדם
+            holder.itemView.setBackgroundColor(Color.parseColor("#44FF0000")); // סימון אדום בהיר
         } else {
             holder.itemView.setBackgroundColor(Color.TRANSPARENT);
         }
@@ -52,13 +51,13 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
         if (item.isFolder()) {
             MainActivity.FolderItem folder = (MainActivity.FolderItem) item;
             
-            // הגדרת אייקון לתיקייה
+            // טעינת אייקון לתיקייה
             if (folder.customIconPath != null) {
                 Glide.with(context).load(Uri.parse(folder.customIconPath)).into(holder.imageView);
             } else if (folder.useFirstAppIcon && !folder.appsInside.isEmpty()) {
                 loadAppIcon(folder.appsInside.get(0), holder.imageView);
             } else {
-                // שימוש באייקון המובנה של אנדרואיד לתיקייה כדי שלא יקרוס אם ic_folder חסר ב-drawable
+                // מניעת קריסה: שימוש באייקון תיקייה מערכתי מובנה של אנדרואיד במקום קובץ מקומי חסר
                 holder.imageView.setImageResource(android.R.drawable.ic_menu_archive);
             }
         } else {
@@ -66,7 +65,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             loadAppIcon(app, holder.imageView);
         }
 
-        // לחיצה רגילה
+        // הגדרת לחיצה קצרה
         holder.itemView.setOnClickListener(v -> {
             if (mainActivity != null && mainActivity.isPickingDestination()) {
                 mainActivity.handleDestinationSelected(position);
@@ -84,7 +83,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
             }
         });
 
-        // לחיצה ארוכה לפתיחת תפריט
+        // הגדרת לחיצה ארוכה לפתיחת תפריט האפשרויות
         holder.itemView.setOnLongClickListener(v -> {
             if (mainActivity != null) {
                 mainActivity.showContextMenu(v, position);
