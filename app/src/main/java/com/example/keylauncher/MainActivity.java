@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
     private static final int REQUEST_PICK_WIDGET = 1;
     private static final int REQUEST_PICK_APP_ICON = 300;
     private static final int REQUEST_PICK_FOLDER_ICON = 200;
+    private static final int REQUEST_BIND_WIDGET = 100;
     
     private AppWidgetManager widgetManager;
     private AppWidgetHost widgetHost;
@@ -300,7 +301,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // שינוי: טעינת הסטייל הסגול המותאם אישית מה-XML (PurplePopupMenu)
+    // הגדרת הסטייל הסגול שיצרת ב-styles.xml עבור כל התפריטים
     private PopupMenu createStyledPopupMenu(View anchorView) {
         Context wrapper = new ContextThemeWrapper(this, R.style.PurplePopupMenu);
         return new PopupMenu(wrapper, anchorView);
@@ -675,13 +676,23 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
+    // שיפור משמעותי: הגנה ואישור Bind אוטומטי מתוך האפליקציה למניעת חסימות מערכת
     public void selectWidget() {
         if (widgetHost == null) return;
         try {
             int appWidgetId = widgetHost.allocateAppWidgetId();
-            Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
-            pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-            startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
+            
+            // בגרסאות ישנות, ננסה לבצע BIND. אם המערכת חוסמת - נקפיץ חלון אישור מערכתי
+            if (widgetManager != null && !widgetManager.bindAppWidgetIdIfAllowed(appWidgetId, new android.content.ComponentName(this, MainActivity.class))) {
+                Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
+                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, new android.content.ComponentName(this, MainActivity.class)); 
+                startActivityForResult(intent, REQUEST_BIND_WIDGET);
+            } else {
+                Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
+                pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+                startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
+            }
         } catch (Exception e) {
             Toast.makeText(this, "לא ניתן להוסיף ווידג'טים במכשיר זה", Toast.LENGTH_LONG).show();
         }
@@ -690,26 +701,37 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == RESULT_OK && data != null) {
-            if (requestCode == REQUEST_PICK_WIDGET) {
-                currentWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-                getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
-                if (widgetManager != null) {
-                    createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
-                }
+        if (resultCode == RESULT_OK) {
+            // אם המשתמש אישר את ה-Bind, נמשיך מייד לבחירת הווידג'ט
+            if (requestCode == REQUEST_BIND_WIDGET && data != null) {
+                int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+                Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
+                pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+                startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
+                return;
             }
-            else if (requestCode == REQUEST_PICK_APP_ICON && appItemEditingNow != null) { 
-                appItemEditingNow.customIconUri = data.getData().toString();
-                appItemEditingNow = null; 
-                saveLauncherState();
-                refreshViews();
-            } 
-            else if (requestCode == REQUEST_PICK_FOLDER_ICON && folderItemEditingNow != null) { 
-                folderItemEditingNow.customIconPath = data.getData().toString();
-                folderItemEditingNow.useFirstAppIcon = false;
-                folderItemEditingNow = null; 
-                saveLauncherState();
-                refreshViews();
+            
+            if (data != null) {
+                if (requestCode == REQUEST_PICK_WIDGET) {
+                    currentWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+                    getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
+                    if (widgetManager != null) {
+                        createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                    }
+                }
+                else if (requestCode == REQUEST_PICK_APP_ICON && appItemEditingNow != null) { 
+                    appItemEditingNow.customIconUri = data.getData().toString();
+                    appItemEditingNow = null; 
+                    saveLauncherState();
+                    refreshViews();
+                } 
+                else if (requestCode == REQUEST_PICK_FOLDER_ICON && folderItemEditingNow != null) { 
+                    folderItemEditingNow.customIconPath = data.getData().toString();
+                    folderItemEditingNow.useFirstAppIcon = false;
+                    folderItemEditingNow = null; 
+                    saveLauncherState();
+                    refreshViews();
+                }
             }
         }
     }
@@ -725,7 +747,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // פותר את בעיית המגע: הגדרת מגע והעברת קליקים ישירות לתוך הווידג'ט
     private void createWidgetView(int appWidgetId, AppWidgetProviderInfo appWidgetInfo) {
         if (widgetContainer == null || appWidgetInfo == null || widgetHost == null) return;
         try {
