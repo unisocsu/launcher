@@ -301,7 +301,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // תפריט הפופאפ משתמש ב-Wrapper פשוט שיציג את העיצוב שלנו ללא דריסת סגנונות מערכת חסרים
+    // תפריט הפופאפ משתמש ב-Wrapper מיוחד שמחיל עליו את העיצוב מהקובץ styles.xml
     private PopupMenu createStyledPopupMenu(View anchorView) {
         try {
             Context wrapper = new ContextThemeWrapper(this, R.style.AppTheme);
