@@ -301,10 +301,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    // תפריט מעוצב פשוט - מסתמך על ה-AppTheme במניפסט שיספק את הרקע הסגול והטקסט הלבן
+    // תפריט הפופאפ משתמש ב-Wrapper פשוט שיציג את העיצוב שלנו ללא דריסת סגנונות מערכת חסרים
     private PopupMenu createStyledPopupMenu(View anchorView) {
         try {
-            return new PopupMenu(this, anchorView);
+            Context wrapper = new ContextThemeWrapper(this, R.style.AppTheme);
+            return new PopupMenu(wrapper, anchorView);
         } catch (Exception e) {
             return new PopupMenu(this, anchorView);
         }
@@ -679,17 +680,14 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
-    // תהליך בחירת הווידג'ט והקצאתו
     public void selectWidget() {
         if (widgetHost == null) {
             Toast.makeText(this, "מארח הווידג'טים לא אותחל כראוי", Toast.LENGTH_SHORT).show();
             return;
         }
         try {
-            // שלב א': הקצאת מזהה ווידג'ט חדש עבור הבחירה
             int appWidgetId = widgetHost.allocateAppWidgetId();
             
-            // שלב ב': פתיחת הדיאלוג המערכתי לבחירת הווידג'טים
             Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
             pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
             startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
@@ -704,7 +702,6 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK) {
             
-            // אם המשתמש נתן אישור קישור (Bind) במסך ההרשאות המובנה של המערכת
             if (requestCode == REQUEST_BIND_WIDGET && data != null) {
                 int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
                 if (appWidgetId != -1 && widgetManager != null) {
@@ -716,20 +713,16 @@ public class MainActivity extends Activity {
             }
             
             if (data != null) {
-                // המשתמש בחר ווידג'ט מתוך רשימת המערכת
                 if (requestCode == REQUEST_PICK_WIDGET) {
                     int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
                     android.content.ComponentName provider = data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER);
                     
                     if (widgetManager != null && provider != null) {
-                        // בודקים אם המערכת מאשרת לנו לחבר את הווידג'ט מיד ללא מסך הרשאות נוסף
                         if (widgetManager.bindAppWidgetIdIfAllowed(appWidgetId, provider)) {
-                            // יש הרשאה, מציגים מיד ושומרים
                             currentWidgetId = appWidgetId;
                             getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
                             createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
                         } else {
-                            // אין הרשאה – נקפיץ את מסך הבקשה המובנה של אנדרואיד לאישור הווידג'ט על ידי המשתמש
                             Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
                             intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
                             intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider);
