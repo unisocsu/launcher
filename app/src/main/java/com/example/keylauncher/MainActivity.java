@@ -301,17 +301,16 @@ public class MainActivity extends Activity {
         }
     }
 
-    // הגדרת הסטייל הסגול שיצרת ב-styles.xml עבור כל התפריטים
-// יצירת תפריט מוגן - אם העיצוב הסגול נכשל, משתמש בעיצוב ברירת המחדל של המכשיר
+    // תפריט מוגן - במקרה שהעיצוב המותאם קורס או חסר, נעשה שימוש אוטומטי בתפריט המערכת
     private PopupMenu createStyledPopupMenu(View anchorView) {
         try {
             Context wrapper = new ContextThemeWrapper(this, R.style.PurplePopupMenu);
             return new PopupMenu(wrapper, anchorView);
         } catch (Exception e) {
-            // הגנה: במקרה של תקלה בסטייל, פתח תפריט מערכת רגיל
             return new PopupMenu(this, anchorView);
         }
     }
+
     public void showContextMenu(View anchorView, int position) {
         PopupMenu popup = createStyledPopupMenu(anchorView);
         
@@ -681,25 +680,23 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
-    // שיפור משמעותי: הגנה ואישור Bind אוטומטי מתוך האפליקציה למניעת חסימות מערכת
+    // תהליך בחירת הווידג'ט והקצאתו המקורית
     public void selectWidget() {
-        if (widgetHost == null) return;
+        if (widgetHost == null) {
+            Toast.makeText(this, "מארח הווידג'טים לא אותחל כראוי", Toast.LENGTH_SHORT).show();
+            return;
+        }
         try {
+            // שלב א': הקצאת מזהה ווידג'ט חדש עבור הבחירה
             int appWidgetId = widgetHost.allocateAppWidgetId();
             
-            // בגרסאות ישנות, ננסה לבצע BIND. אם המערכת חוסמת - נקפיץ חלון אישור מערכתי
-            if (widgetManager != null && !widgetManager.bindAppWidgetIdIfAllowed(appWidgetId, new android.content.ComponentName(this, MainActivity.class))) {
-                Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
-                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, new android.content.ComponentName(this, MainActivity.class)); 
-                startActivityForResult(intent, REQUEST_BIND_WIDGET);
-            } else {
-                Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
-                pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-                startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
-            }
+            // שלב ב': פתיחת הדיאלוג של אנדרואיד המציג רשימה לבחירת הווידג'טים
+            Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
+            pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+            startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
+            
         } catch (Exception e) {
-            Toast.makeText(this, "לא ניתן להוסיף ווידג'טים במכשיר זה", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "שגיאה: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -707,21 +704,38 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK) {
-            // אם המשתמש אישר את ה-Bind, נמשיך מייד לבחירת הווידג'ט
+            
+            // אם המשתמש אישר את הביינד (Bind) בחלון המערכת
             if (requestCode == REQUEST_BIND_WIDGET && data != null) {
                 int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-                Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
-                pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-                startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
+                if (appWidgetId != -1 && widgetManager != null) {
+                    currentWidgetId = appWidgetId;
+                    getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
+                    createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                }
                 return;
             }
             
             if (data != null) {
+                // המשתמש בחר ווידג'ט מתוך רשימת המערכת
                 if (requestCode == REQUEST_PICK_WIDGET) {
-                    currentWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-                    getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
-                    if (widgetManager != null) {
-                        createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                    int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+                    android.content.ComponentName provider = data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER);
+                    
+                    if (widgetManager != null && provider != null) {
+                        // בודקים אם יש לנו אישור רשמי של המערכת לחיבור הווידג'ט
+                        if (widgetManager.bindAppWidgetIdIfAllowed(appWidgetId, provider)) {
+                            // יש הרשאה, אפשר להציג אותו מייד!
+                            currentWidgetId = appWidgetId;
+                            getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
+                            createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                        } else {
+                            // אין הרשאה – נקפיץ את הבקשה הרשמית המובנית של המערכת לאישור ה-Bind
+                            Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
+                            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+                            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider);
+                            startActivityForResult(intent, REQUEST_BIND_WIDGET);
+                        }
                     }
                 }
                 else if (requestCode == REQUEST_PICK_APP_ICON && appItemEditingNow != null) { 
