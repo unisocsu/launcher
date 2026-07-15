@@ -9,7 +9,7 @@
         android:allowBackup="true"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="Key Launcher"
-        android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+        android:theme="@style/AppTheme">
         
         <activity
             android:name=".MainActivity"
