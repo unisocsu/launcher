@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
 
     private static final int HOST_ID = 1024;
     private static final int REQUEST_PICK_WIDGET = 1;
+    private static final int REQUEST_CREATE_WIDGET = 2;
     private static final int REQUEST_PICK_APP_ICON = 300;
     private static final int REQUEST_PICK_FOLDER_ICON = 200;
     private static final int REQUEST_BIND_WIDGET = 100;
@@ -62,6 +63,7 @@ public class MainActivity extends Activity {
     private AppWidgetManager widgetManager;
     private AppWidgetHost widgetHost;
     private ViewGroup widgetContainer;
+    private View widgetPlaceholderText;
 
     private LauncherItem pendingMoveItem = null;
     private int pendingMovePosition = -1;
@@ -143,6 +145,7 @@ public class MainActivity extends Activity {
         }
         startTimeUpdate();
 
+        widgetPlaceholderText = findViewById(R.id.widget_placeholder_text);
         widgetContainer = findViewById(R.id.widget_container);
         if (widgetContainer != null) {
             widgetContainer.setOnLongClickListener(v -> {
@@ -154,7 +157,6 @@ public class MainActivity extends Activity {
         try {
             widgetManager = AppWidgetManager.getInstance(this);
             widgetHost = new AppWidgetHost(this, HOST_ID);
-            widgetHost.startListening();
         } catch (Exception e) {
             Toast.makeText(this, "התקן זה לא תומך בווידג'טים", Toast.LENGTH_LONG).show();
         }
@@ -163,14 +165,6 @@ public class MainActivity extends Activity {
             loadLauncherItems();
         } else {
             syncAndCleanLauncherItems(); 
-        }
-
-        currentWidgetId = sharedPreferences.getInt("saved_widget_id", -1);
-        if (currentWidgetId != -1 && widgetManager != null) {
-            AppWidgetProviderInfo info = widgetManager.getAppWidgetInfo(currentWidgetId);
-            if (info != null) {
-                createWidgetView(currentWidgetId, info);
-            }
         }
 
         adapter = new LauncherAdapter(this, launcherItems);
@@ -502,23 +496,31 @@ public class MainActivity extends Activity {
 
         popup.setOnMenuItemClickListener(item -> {
             int itemId = item.getItemId();
-            if (itemId == 10 && widgetContainer != null && widgetContainer.getChildCount() > 0) {
-                widgetContainer.removeAllViews();
-                if (currentWidgetId != -1 && widgetHost != null) {
-                    try {
-                        widgetHost.deleteAppWidgetId(currentWidgetId);
-                    } catch (Exception e) { /* הגנה */ }
-                    
-                    currentWidgetId = -1;
-                    getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", -1).apply();
-                }
-                Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
+            if (itemId == 10) {
+                removeCurrentWidget();
             } else if (itemId == 11) {
                 selectWidget();
             }
             return true;
         });
         popup.show();
+    }
+
+    private void removeCurrentWidget() {
+        if (widgetContainer != null) {
+            widgetContainer.removeAllViews();
+        }
+        if (widgetPlaceholderText != null) {
+            widgetPlaceholderText.setVisibility(View.VISIBLE);
+        }
+        if (currentWidgetId != -1 && widgetHost != null) {
+            try {
+                widgetHost.deleteAppWidgetId(currentWidgetId);
+            } catch (Exception e) { /* הגנה */ }
+            currentWidgetId = -1;
+            getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", -1).apply();
+        }
+        Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
     }
 
     private void showShortcutKeyDialog(int position) {
@@ -535,13 +537,13 @@ public class MainActivity extends Activity {
                 int androidKeyCode = KeyEvent.KEYCODE_0 + targetDigit;
                 
                 shortcutPositionsMap.put(androidKeyCode, position);
-                
                 SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
                 sharedPreferences.edit().putInt("shortcut_pos_" + androidKeyCode, position).apply();
                 
                 Toast.makeText(this, "המקש " + targetDigit + " הוגדר למיקום " + position, Toast.LENGTH_SHORT).show();
             }
         });
+        builder.setNegativeButton("ביטול", null);
         builder.show();
     }
 
@@ -559,6 +561,7 @@ public class MainActivity extends Activity {
                 refreshViews();
             }
         });
+        builder.setNegativeButton("ביטול", null);
         builder.show();
     }
 
@@ -707,11 +710,9 @@ public class MainActivity extends Activity {
         }
         try {
             int appWidgetId = widgetHost.allocateAppWidgetId();
-            
             Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
             pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
             startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
-            
         } catch (Exception e) {
             Toast.makeText(this, "שגיאה: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
@@ -721,7 +722,6 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK) {
-            
             if (requestCode == REQUEST_BIND_WIDGET && data != null) {
                 int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
                 if (appWidgetId != -1 && widgetManager != null) {
@@ -738,16 +738,29 @@ public class MainActivity extends Activity {
                     android.content.ComponentName provider = data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER);
                     
                     if (widgetManager != null && provider != null) {
-                        if (widgetManager.bindAppWidgetIdIfAllowed(appWidgetId, provider)) {
+                        try {
+                            if (widgetManager.bindAppWidgetIdIfAllowed(appWidgetId, provider)) {
+                                configureAndBuildWidget(appWidgetId, widgetManager.getAppWidgetInfo(appWidgetId));
+                            } else {
+                                Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
+                                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+                                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider);
+                                startActivityForResult(intent, REQUEST_BIND_WIDGET);
+                            }
+                        } catch (SecurityException se) {
+                            // קריטי עבור פתרון באגים ב-User/System App
                             currentWidgetId = appWidgetId;
                             getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
                             createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
-                        } else {
-                            Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
-                            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-                            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider);
-                            startActivityForResult(intent, REQUEST_BIND_WIDGET);
                         }
+                    }
+                }
+                else if (requestCode == REQUEST_CREATE_WIDGET) {
+                    int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+                    if (appWidgetId != -1 && widgetManager != null) {
+                        currentWidgetId = appWidgetId;
+                        getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
+                        createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
                     }
                 }
                 else if (requestCode == REQUEST_PICK_APP_ICON && appItemEditingNow != null) { 
@@ -767,6 +780,19 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void configureAndBuildWidget(int appWidgetId, AppWidgetProviderInfo info) {
+        if (info != null && info.configure != null) {
+            Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE);
+            intent.setComponent(info.configure);
+            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+            startActivityForResult(intent, REQUEST_CREATE_WIDGET);
+        } else {
+            currentWidgetId = appWidgetId;
+            getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
+            createWidgetView(currentWidgetId, info);
+        }
+    }
+
     private void refreshViews() {
         if (adapter != null) {
             adapter.notifyDataSetChanged();
@@ -782,33 +808,61 @@ public class MainActivity extends Activity {
         if (widgetContainer == null || appWidgetInfo == null || widgetHost == null) return;
         try {
             widgetContainer.removeAllViews();
+            if (widgetPlaceholderText != null) {
+                widgetPlaceholderText.setVisibility(View.GONE);
+            }
             
-            // יצירת ה-HostView
             AppWidgetHostView hostView = widgetHost.createView(this, appWidgetId, appWidgetInfo);
             hostView.setAppWidget(appWidgetId, appWidgetInfo);
             
-            // פתרון הגדלים: הגדרת LayoutParams של "התאם למסך" (Match Parent)
             FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
             );
             hostView.setLayoutParams(layoutParams);
-            
             hostView.setFocusable(true);
             hostView.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
             
-            // הוספה לקונטיינר והכרח הזרקת עדכון תצוגה
             widgetContainer.addView(hostView); 
             hostView.postInvalidate();
+            widgetContainer.requestLayout();
             
         } catch (Exception e) {
-            Toast.makeText(this, "שגיאה בטעינת תצוגת הווידג'ט", Toast.LENGTH_SHORT).show();
+            if (widgetPlaceholderText != null) {
+                widgetPlaceholderText.setVisibility(View.VISIBLE);
+            }
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        
+        // הבאג המרכזי נפתר כאן: האזנה מחדש של ה-Host בכל חזרה למסך הבית
+        if (widgetHost != null) {
+            try {
+                widgetHost.startListening();
+            } catch (Exception e) {}
+        }
+
+        SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
+        currentWidgetId = sharedPreferences.getInt("saved_widget_id", -1);
+        
+        if (currentWidgetId != -1 && widgetManager != null) {
+            AppWidgetProviderInfo info = widgetManager.getAppWidgetInfo(currentWidgetId);
+            if (info != null) {
+                createWidgetView(currentWidgetId, info);
+            } else {
+                if (widgetPlaceholderText != null) {
+                    widgetPlaceholderText.setVisibility(View.VISIBLE);
+                }
+            }
+        } else {
+            if (widgetPlaceholderText != null) {
+                widgetPlaceholderText.setVisibility(View.VISIBLE);
+            }
+        }
+
         if (adapter != null) {
             syncAndCleanLauncherItems();
             adapter.notifyDataSetChanged();
