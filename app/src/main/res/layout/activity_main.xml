@@ -36,7 +36,18 @@
             android:minHeight="60dp"
             android:focusable="true"
             android:clickable="true"
-            android:background="?android:attr/selectableItemBackground" />
+            android:background="?android:attr/selectableItemBackground">
+
+            <TextView
+                android:id="@+id/widget_placeholder_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="לחץ לחיצה ארוכה להוספת ווידג'ט"
+                android:textColor="#88FFFFFF"
+                android:textSize="14sp"
+                android:visibility="visible" />
+
+        </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/launcher_recycler_view"
