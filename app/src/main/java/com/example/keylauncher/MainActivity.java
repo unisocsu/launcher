@@ -19,6 +19,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -189,6 +190,26 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (widgetHost != null) {
+            try {
+                widgetHost.startListening();
+            } catch (Exception e) { /* הגנה */ }
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (widgetHost != null) {
+            try {
+                widgetHost.stopListening();
+            } catch (Exception e) { /* הגנה */ }
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         timeHandler.removeCallbacks(timeRunnable);
@@ -301,7 +322,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // תפריט הפופאפ משתמש ב-Wrapper מיוחד שמחיל עליו את העיצוב מהקובץ styles.xml
     private PopupMenu createStyledPopupMenu(View anchorView) {
         try {
             Context wrapper = new ContextThemeWrapper(this, R.style.AppTheme);
@@ -762,13 +782,25 @@ public class MainActivity extends Activity {
         if (widgetContainer == null || appWidgetInfo == null || widgetHost == null) return;
         try {
             widgetContainer.removeAllViews();
+            
+            // יצירת ה-HostView
             AppWidgetHostView hostView = widgetHost.createView(this, appWidgetId, appWidgetInfo);
             hostView.setAppWidget(appWidgetId, appWidgetInfo);
+            
+            // פתרון הגדלים: הגדרת LayoutParams של "התאם למסך" (Match Parent)
+            FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+            );
+            hostView.setLayoutParams(layoutParams);
             
             hostView.setFocusable(true);
             hostView.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
             
+            // הוספה לקונטיינר והכרח הזרקת עדכון תצוגה
             widgetContainer.addView(hostView); 
+            hostView.postInvalidate();
+            
         } catch (Exception e) {
             Toast.makeText(this, "שגיאה בטעינת תצוגת הווידג'ט", Toast.LENGTH_SHORT).show();
         }
