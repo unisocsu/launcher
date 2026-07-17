@@ -29,11 +29,10 @@
         <LinearLayout
             android:id="@+id/widget_container"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="200dp"
             android:orientation="vertical"
             android:gravity="center"
             android:paddingBottom="8dp"
-            android:minHeight="60dp"
             android:focusable="true"
             android:clickable="true"
             android:background="?android:attr/selectableItemBackground">
