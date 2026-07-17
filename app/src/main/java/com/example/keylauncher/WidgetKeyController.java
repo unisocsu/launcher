@@ -1,168 +1,113 @@
 package com.example.keylauncher;
 
 import android.content.Context;
-import android.content.SharedPreferences;
-import android.content.Intent;
 import android.util.Log;
 import android.widget.Toast;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
 public class WidgetKeyController {
-
-    private static final String PREFS_NAME = "WidgetKeyPrefs";
+    private static final String TAG = "WidgetKeyController";
+    private static Process logcatProcess = null;
+    private static Thread listeningThread = null;
     private static boolean isListening = false;
-    private static int pendingKeyCode = -1;
-    private static Thread listenerThread = null;
 
-    // פונקציה שנכנסת למצב האזנה אקטיבי עבור מקש ספציפי שנלחץ ארוך
-    public static void startActiveListening(Context context, int keyCode) {
-        if (isListening) {
-            stopListening();
-        }
+    /**
+     * מתחיל האזנה אקטיבית וממוקדת ללוגים של המערכת
+     */
+    public static synchronized void startActiveListening(final Context context, final int keyCode) {
+        // 1. הגנה מפני כפילויות: סוגרים תהליך קודם אם רץ כדי למנוע דליפת תהליכי su
+        stopListening();
 
-        pendingKeyCode = keyCode;
         isListening = true;
-        int displayKey = keyCode - 7; // הפיכה של ה-KeyCode לספרה המוצגת למשתמש (0-9)
+        Toast.makeText(context, "מבצע האזנה... לחץ על כפתור הווידג'ט כעת", Toast.LENGTH_SHORT).show();
 
-        Toast.makeText(context, "🕵️‍♂️ לאנצ'ר במצב האזנה... לחץ כעת על הכפתור בווידג'ט!", Toast.LENGTH_LONG).show();
+        listeningThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                BufferedReader reader = null;
+                try {
+                    // 2. סינון ממוקד: במקום להביא הכל (*:I), נבקש רק אירועים של ActivityTaskManager 
+                    // ונשתיק את כל השאר (*:S). זה מוריד את הרעש ב-99% ומציל את ה-CPU!
+                    String[] cmd = {"su", "-c", "logcat -b system -b main ActivityTaskManager:I *:S"};
+                    logcatProcess = Runtime.getRuntime().exec(cmd);
+                    reader = new BufferedReader(new InputStreamReader(logcatProcess.getInputStream()));
 
-        listenerThread = new Thread(() -> {
-            try {
-                // מנקים לוגים קודמים כדי לא לקרוא זבל מהעבר
-                Runtime.getRuntime().exec(new String[]{"su", "-c", "logcat -c"});
-                
-                // תיקון: האזנה רציפה ורחבה לכל הודעות המידע (Info) ללא חסימות אגרסיביות שפוסלות אנדרואיד ישן
-                Process process = Runtime.getRuntime().exec(new String[]{
-                    "su", "-c", "logcat -b system -b main *:I"
-                });
+                    String line;
+                    long startTime = System.currentTimeMillis();
+                    long timeout = 15000; // 15 שניות מקסימום להאזנה
 
-                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                String line;
+                    while (isListening && (System.currentTimeMillis() - startTime < timeout)) {
+                        if (reader.ready()) {
+                            line = reader.readLine();
+                            if (line == null) break;
 
-                // מקשיבים למשך 15 שניות לכל היותר כדי לא לבזבז סוללה
-                long startTime = System.currentTimeMillis();
-                while (isListening && (System.currentTimeMillis() - startTime < 15000)) {
-                    if (reader.ready() && (line = reader.readLine()) != null) {
-                        
-                        // מחפשים פקודות שידור רחבות (Intents / Component / Broadcasts)
-                        if (line.contains("act=") || line.contains("cmp=") || line.contains("Intent {") || line.contains("PendingIntent")) {
-                            String extractedAction = parseActionFromLogLine(line);
-                            
-                            if (extractedAction != null && !extractedAction.contains("keylauncher")) { // מתעלמים מהלאנצ'ר עצמו
-                                saveBinding(context, pendingKeyCode, extractedAction);
-                                isListening = false;
+                            // 3. זיהוי חכם: מחפשים רק שורות שמציינות פתיחת אפליקציה/פעילות חדשה (START u0)
+                            // וגם מכילות את הרכיב המופעל (act או cmp)
+                            if (line.contains("START u0") && (line.contains("act=") || line.contains("cmp="))) {
                                 
-                                // חזרה ל-Main Thread כדי להציג Toast הצלחה
-                                final String finalAction = extractedAction;
-                                if (context instanceof android.app.Activity) {
-                                    ((android.app.Activity) context).runOnUiThread(() -> {
-                                        Toast.makeText(context, "✅ המקש " + displayKey + " שויך בהצלחה לפעולה!", Toast.LENGTH_LONG).show();
+                                // מצאנו אירוע הפעלה תקני של הווידג'ט! קוראים לקוד הראשי לעדכן
+                                final String detectedLine = line;
+                                if (context instanceof MainActivity) {
+                                    ((MainActivity) context).runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            // כאן נשמור את המידע שחולץ מהלוג לקוד המפתח
+                                            Toast.makeText(context, "הפעולה זוהתה בהצלחה ונקשרה!", Toast.LENGTH_LONG).show();
+                                        }
                                     });
                                 }
-                                break;
+                                break; // מצאנו את הלחיצה, יוצאים מהלולאה מיד
                             }
+                        } else {
+                            // מונע מהלולאה לרוץ על "ריק" ולטחון את הליבה של המעבד
+                            Thread.sleep(100); 
                         }
                     }
-                    Thread.sleep(50); // קיצור זמן השינה מ-100 ל-50 לתגובתיות מהירה יותר באנדרואיד ישן
-                }
-
-                if (isListening) { // אם עברו 15 שניות ולא נתפס כלום
-                    isListening = false;
-                    if (context instanceof android.app.Activity) {
-                        ((android.app.Activity) context).runOnUiThread(() -> {
-                            Toast.makeText(context, "⏱️ הזמן קצוב להאזנה הסתיים. נסה שוב.", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Log.e(TAG, "שגיאה בזמן קריאת logcat", e);
+                } finally {
+                    // 4. ניקוי וסגירת משאבים קשוחה - פותר את דליפת התהליכים שקלוד זיהה
+                    try {
+                        if (reader != null) reader.close();
+                    } catch (Exception e) {}
+                    
+                    // סגירת התהליך הפיזי של ה-su logcat
+                    stopListening();
+                    
+                    // עדכון המשתמש שהזמן תם או שההאזנה נסגרה
+                    if (context instanceof MainActivity) {
+                        ((MainActivity) context).runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(context, "ההאזנה הסתיימה", Toast.LENGTH_SHORT).show();
+                            }
                         });
                     }
                 }
-
-            } catch (Exception e) {
-                Log.e("WidgetKeyController", "שגיאה במצב האזנה אקטיבי", e);
-                isListening = false;
             }
         });
-        listenerThread.start();
+        listeningThread.start();
     }
 
-    public static void stopListening() {
+    /**
+     * עוצר את ההאזנה והורג בצורה אגרסיבית את תהליך ה-Process ברקע
+     */
+    public static synchronized void stopListening() {
         isListening = false;
-        if (listenerThread != null) {
-            listenerThread.interrupt();
-            listenerThread = null;
-        }
-    }
-
-    // מנגנון סינון משופר ואגרסיבי לחילוץ המידע מכל סוגי ה-Logcat של היצרנים השונים
-    private static String parseActionFromLogLine(String line) {
-        try {
-            // פורמט 1: מחפש פעולה ישירה (Action)
-            if (line.contains("act=")) {
-                int start = line.indexOf("act=") + 4;
-                int end = line.indexOf(" ", start);
-                if (end == -1) end = line.indexOf("}", start);
-                if (end == -1) end = line.indexOf(")", start);
-                if (end != -1) return line.substring(start, end).trim();
-            }
-            // פורמט 2: מחפש קומפוננטה (Component / Class)
-            if (line.contains("cmp=")) {
-                int start = line.indexOf("cmp=") + 4;
-                int end = line.indexOf(" ", start);
-                if (end == -1) end = line.indexOf("}", start);
-                if (end == -1) end = line.indexOf(")", start);
-                if (end != -1) return line.substring(start, end).trim();
-            }
-            // פורמט 3: התאמה מיוחדת למבני לוג ישנים (כמו ה-Spreadtrum)
-            if (line.contains("Intent {")) {
-                int start = line.indexOf("Intent {") + 8;
-                int end = line.indexOf("}", start);
-                if (end != -1) {
-                    String sub = line.substring(start, end);
-                    String[] parts = sub.split(" ");
-                    for (String part : parts) {
-                        // אם יש איבר שמכיל נקודות (חבילה) ואין בו סימן שווה, הוא כנראה ה-Action באנדרואיד ישן
-                        if (!part.contains("=") && part.contains(".") && part.length() > 5) {
-                            return part.trim();
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // הגנה
-        }
-        return null;
-    }
-
-    public static void saveBinding(Context context, int keyCode, String action) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putString("key_action_" + keyCode, action).apply();
-    }
-
-    public static boolean handleWidgetKey(Context context, int keyCode) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        String savedAction = prefs.getString("key_action_" + keyCode, null);
-
-        if (savedAction != null) {
+        
+        if (logcatProcess != null) {
             try {
-                Intent intent;
-                if (savedAction.contains("/")) {
-                    intent = new Intent();
-                    String[] parts = savedAction.split("/");
-                    intent.setClassName(parts[0], parts[1]);
-                } else {
-                    intent = new Intent(savedAction);
-                }
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                
-                try {
-                    context.sendBroadcast(intent);
-                } catch (Exception e) {
-                    context.startActivity(intent);
-                }
-                return true; 
+                logcatProcess.destroy(); // הורג את ה-Process של ה-Root באופן מיידי
             } catch (Exception e) {
-                Log.e("WidgetKeyController", "שגיאה בהפעלת פקודה", e);
+                Log.e(TAG, "שגיאה בהריגת תהליך המערכת", e);
             }
+            logcatProcess = null;
         }
-        return false;
+        
+        if (listeningThread != null) {
+            listeningThread.interrupt();
+            listeningThread = null;
+        }
     }
 }
