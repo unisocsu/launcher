@@ -169,6 +169,12 @@ public class MainActivity extends Activity {
 
         adapter = new LauncherAdapter(this, launcherItems);
         recyclerView.setAdapter(adapter);
+
+        // טעינת הווידג'ט השמור בעת עליית הלאנצ'ר מחדש
+        currentWidgetId = sharedPreferences.getInt("saved_widget_id", -1);
+        if (currentWidgetId != -1 && widgetManager != null) {
+            createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+        }
     }
 
     private void startTimeUpdate() {
@@ -518,7 +524,7 @@ public class MainActivity extends Activity {
                 widgetHost.deleteAppWidgetId(currentWidgetId);
             } catch (Exception e) { /* הגנה */ }
             currentWidgetId = -1;
-            getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", -1).apply();
+            saveWidgetId(-1);
         }
         Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
     }
@@ -721,49 +727,67 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        
         if (resultCode == RESULT_OK) {
-            if (requestCode == REQUEST_BIND_WIDGET && data != null) {
-                int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+            // 1. חזרה מאישור ה-Bind של המערכת
+            if (requestCode == REQUEST_BIND_WIDGET) {
+                int appWidgetId = data != null ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) : currentWidgetId;
                 if (appWidgetId != -1 && widgetManager != null) {
                     currentWidgetId = appWidgetId;
-                    getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
+                    saveWidgetId(currentWidgetId);
                     createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
                 }
                 return;
             }
             
-            if (data != null) {
-                if (requestCode == REQUEST_PICK_WIDGET) {
-                    int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-                    android.content.ComponentName provider = data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER);
+            // 2. חזרה ממסך בחירת הווידג'ט
+            if (requestCode == REQUEST_PICK_WIDGET && data != null) {
+                int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+                android.content.ComponentName provider = data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER);
+                
+                if (appWidgetId != -1 && widgetManager != null) {
+                    AppWidgetProviderInfo info = widgetManager.getAppWidgetInfo(appWidgetId);
                     
-                    if (widgetManager != null && provider != null) {
+                    // תיקון למצבים בהם ה-provider חוזר כ-null אך ה-ID קיים במערכת
+                    if (provider != null && info == null) {
                         try {
                             if (widgetManager.bindAppWidgetIdIfAllowed(appWidgetId, provider)) {
-                                configureAndBuildWidget(appWidgetId, widgetManager.getAppWidgetInfo(appWidgetId));
+                                info = widgetManager.getAppWidgetInfo(appWidgetId);
                             } else {
                                 Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
                                 intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
                                 intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider);
                                 startActivityForResult(intent, REQUEST_BIND_WIDGET);
+                                return;
                             }
                         } catch (SecurityException se) {
-                            // קריטי עבור פתרון באגים ב-User/System App
-                            currentWidgetId = appWidgetId;
-                            getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
-                            createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                            info = widgetManager.getAppWidgetInfo(appWidgetId);
                         }
                     }
-                }
-                else if (requestCode == REQUEST_CREATE_WIDGET) {
-                    int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-                    if (appWidgetId != -1 && widgetManager != null) {
-                        currentWidgetId = appWidgetId;
-                        getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
-                        createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                    
+                    if (info != null) {
+                        configureAndBuildWidget(appWidgetId, info);
+                    } else {
+                        Toast.makeText(this, "שגיאה: לא ניתן לקרוא את נתוני הווידג'ט", Toast.LENGTH_SHORT).show();
                     }
                 }
-                else if (requestCode == REQUEST_PICK_APP_ICON && appItemEditingNow != null) { 
+                return;
+            }
+            
+            // 3. חזרה ממסך הגדרות פנימי של הווידג'ט
+            if (requestCode == REQUEST_CREATE_WIDGET && data != null) {
+                int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+                if (appWidgetId != -1 && widgetManager != null) {
+                    currentWidgetId = appWidgetId;
+                    saveWidgetId(currentWidgetId);
+                    createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                }
+                return;
+            }
+            
+            // 4. שינוי אייקונים מהגלריה
+            if (data != null) {
+                if (requestCode == REQUEST_PICK_APP_ICON && appItemEditingNow != null) { 
                     appItemEditingNow.customIconUri = data.getData().toString();
                     appItemEditingNow = null; 
                     saveLauncherState();
@@ -777,6 +801,11 @@ public class MainActivity extends Activity {
                     refreshViews();
                 }
             }
+        } else if (resultCode == RESULT_CANCELED && data != null) {
+            int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+            if (appWidgetId != -1 && widgetHost != null) {
+                widgetHost.deleteAppWidgetId(appWidgetId);
+            }
         }
     }
 
@@ -788,9 +817,13 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, REQUEST_CREATE_WIDGET);
         } else {
             currentWidgetId = appWidgetId;
-            getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", currentWidgetId).apply();
+            saveWidgetId(currentWidgetId);
             createWidgetView(currentWidgetId, info);
         }
+    }
+
+    private void saveWidgetId(int widgetId) {
+        getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", widgetId).apply();
     }
 
     private void refreshViews() {
@@ -805,9 +838,18 @@ public class MainActivity extends Activity {
     }
 
     private void createWidgetView(int appWidgetId, AppWidgetProviderInfo appWidgetInfo) {
-        if (widgetContainer == null || appWidgetInfo == null || widgetHost == null) return;
+        if (widgetContainer == null || widgetHost == null) return;
+        
+        widgetContainer.removeAllViews();
+        
+        if (appWidgetInfo == null) {
+            if (widgetPlaceholderText != null) {
+                widgetPlaceholderText.setVisibility(View.VISIBLE);
+            }
+            return;
+        }
+        
         try {
-            widgetContainer.removeAllViews();
             if (widgetPlaceholderText != null) {
                 widgetPlaceholderText.setVisibility(View.GONE);
             }
@@ -815,9 +857,9 @@ public class MainActivity extends Activity {
             AppWidgetHostView hostView = widgetHost.createView(this, appWidgetId, appWidgetInfo);
             hostView.setAppWidget(appWidgetId, appWidgetInfo);
             
-            android.widget.LinearLayout.LayoutParams layoutParams = new android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT
+            ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
             );
             hostView.setLayoutParams(layoutParams);
             hostView.setFocusable(true);
@@ -831,6 +873,7 @@ public class MainActivity extends Activity {
             if (widgetPlaceholderText != null) {
                 widgetPlaceholderText.setVisibility(View.VISIBLE);
             }
+            Toast.makeText(this, "שגיאה ברנדור הווידג'ט: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -838,7 +881,6 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         
-        // הבאג המרכזי נפתר כאן: האזנה מחדש של ה-Host בכל חזרה למסך הבית
         if (widgetHost != null) {
             try {
                 widgetHost.startListening();
