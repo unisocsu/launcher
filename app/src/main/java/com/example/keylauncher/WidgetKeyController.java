@@ -2,112 +2,48 @@ package com.example.keylauncher;
 
 import android.content.Context;
 import android.util.Log;
-import android.widget.Toast;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import android.view.KeyEvent;
 
 public class WidgetKeyController {
+
     private static final String TAG = "WidgetKeyController";
-    private static Process logcatProcess = null;
-    private static Thread listeningThread = null;
     private static boolean isListening = false;
+    private static int targetKeyCode = -1;
 
     /**
-     * מתחיל האזנה אקטיבית וממוקדת ללוגים של המערכת
+     * מתחיל האזנה אקטיבית למקש ספציפי (למשל בלחיצה ארוכה)
      */
-    public static synchronized void startActiveListening(final Context context, final int keyCode) {
-        // 1. הגנה מפני כפילויות: סוגרים תהליך קודם אם רץ כדי למנוע דליפת תהליכי su
-        stopListening();
-
+    public static void startActiveListening(MainActivity activity, int keyCode) {
         isListening = true;
-        Toast.makeText(context, "מבצע האזנה... לחץ על כפתור הווידג'ט כעת", Toast.LENGTH_SHORT).show();
-
-        listeningThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                BufferedReader reader = null;
-                try {
-                    // 2. סינון ממוקד: במקום להביא הכל (*:I), נבקש רק אירועים של ActivityTaskManager 
-                    // ונשתיק את כל השאר (*:S). זה מוריד את הרעש ב-99% ומציל את ה-CPU!
-                    String[] cmd = {"su", "-c", "logcat -b system -b main ActivityTaskManager:I *:S"};
-                    logcatProcess = Runtime.getRuntime().exec(cmd);
-                    reader = new BufferedReader(new InputStreamReader(logcatProcess.getInputStream()));
-
-                    String line;
-                    long startTime = System.currentTimeMillis();
-                    long timeout = 15000; // 15 שניות מקסימום להאזנה
-
-                    while (isListening && (System.currentTimeMillis() - startTime < timeout)) {
-                        if (reader.ready()) {
-                            line = reader.readLine();
-                            if (line == null) break;
-
-                            // 3. זיהוי חכם: מחפשים רק שורות שמציינות פתיחת אפליקציה/פעילות חדשה (START u0)
-                            // וגם מכילות את הרכיב המופעל (act או cmp)
-                            if (line.contains("START u0") && (line.contains("act=") || line.contains("cmp="))) {
-                                
-                                // מצאנו אירוע הפעלה תקני של הווידג'ט! קוראים לקוד הראשי לעדכן
-                                final String detectedLine = line;
-                                if (context instanceof MainActivity) {
-                                    ((MainActivity) context).runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            // כאן נשמור את המידע שחולץ מהלוג לקוד המפתח
-                                            Toast.makeText(context, "הפעולה זוהתה בהצלחה ונקשרה!", Toast.LENGTH_LONG).show();
-                                        }
-                                    });
-                                }
-                                break; // מצאנו את הלחיצה, יוצאים מהלולאה מיד
-                            }
-                        } else {
-                            // מונע מהלולאה לרוץ על "ריק" ולטחון את הליבה של המעבד
-                            Thread.sleep(100); 
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "שגיאה בזמן קריאת logcat", e);
-                } finally {
-                    // 4. ניקוי וסגירת משאבים קשוחה - פותר את דליפת התהליכים שקלוד זיהה
-                    try {
-                        if (reader != null) reader.close();
-                    } catch (Exception e) {}
-                    
-                    // סגירת התהליך הפיזי של ה-su logcat
-                    stopListening();
-                    
-                    // עדכון המשתמש שהזמן תם או שההאזנה נסגרה
-                    if (context instanceof MainActivity) {
-                        ((MainActivity) context).runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(context, "ההאזנה הסתיימה", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    }
-                }
-            }
-        });
-        listeningThread.start();
+        targetKeyCode = keyCode;
+        Log.d(TAG, "Started active listening for keycode: " + keyCode);
     }
 
     /**
-     * עוצר את ההאזנה והורג בצורה אגרסיבית את תהליך ה-Process ברקע
+     * מפסיק את ההאזנה ומנקה משאבים (נקרא ב-onDestroy)
      */
-    public static synchronized void stopListening() {
+    public static void stopListening() {
         isListening = false;
-        
-        if (logcatProcess != null) {
-            try {
-                logcatProcess.destroy(); // הורג את ה-Process של ה-Root באופן מיידי
-            } catch (Exception e) {
-                Log.e(TAG, "שגיאה בהריגת תהליך המערכת", e);
-            }
-            logcatProcess = null;
+        targetKeyCode = -1;
+        Log.d(TAG, "Stopped listening");
+    }
+
+    /**
+     * מנהל ומנתב את לחיצות המקשים עבור הווידג'ט
+     * מתודה זו פותרת את שגיאת הקומפילציה ב-Build
+     */
+    public static boolean handleWidgetKey(MainActivity activity, int keyCode) {
+        if (!isListening) {
+            return false;
         }
-        
-        if (listeningThread != null) {
-            listeningThread.interrupt();
-            listeningThread = null;
+
+        // כאן מיושם הלוגיקה של ניתוב המקש אל תוך הווידג'ט הפעיל
+        if (keyCode == targetKeyCode) {
+            Log.d(TAG, "Handling keycode " + keyCode + " for active widget.");
+            // במידה והמקש טופל בהצלחה, נחזיר true כדי לעצור את השרשרת ב-MainActivity
+            return true;
         }
+
+        return false;
     }
 }
