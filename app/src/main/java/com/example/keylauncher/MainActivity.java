@@ -170,7 +170,6 @@ public class MainActivity extends Activity {
         adapter = new LauncherAdapter(this, launcherItems);
         recyclerView.setAdapter(adapter);
 
-        // טעינת הווידג'ט השמור בעת עליית הלאנצ'ר מחדש
         currentWidgetId = sharedPreferences.getInt("saved_widget_id", -1);
         if (currentWidgetId != -1 && widgetManager != null) {
             createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
@@ -716,6 +715,7 @@ public class MainActivity extends Activity {
         }
         try {
             int appWidgetId = widgetHost.allocateAppWidgetId();
+            currentWidgetId = appWidgetId; // שמירה מיידית כגיבוי מקומי
             Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
             pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
             startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
@@ -731,7 +731,7 @@ public class MainActivity extends Activity {
         if (resultCode == RESULT_OK) {
             // 1. חזרה מאישור ה-Bind של המערכת
             if (requestCode == REQUEST_BIND_WIDGET) {
-                int appWidgetId = data != null ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) : currentWidgetId;
+                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, currentWidgetId) : currentWidgetId;
                 if (appWidgetId != -1 && widgetManager != null) {
                     currentWidgetId = appWidgetId;
                     saveWidgetId(currentWidgetId);
@@ -741,14 +741,13 @@ public class MainActivity extends Activity {
             }
             
             // 2. חזרה ממסך בחירת הווידג'ט
-            if (requestCode == REQUEST_PICK_WIDGET && data != null) {
-                int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-                android.content.ComponentName provider = data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER);
+            if (requestCode == REQUEST_PICK_WIDGET) {
+                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, currentWidgetId) : currentWidgetId;
+                android.content.ComponentName provider = (data != null) ? data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER) : null;
                 
                 if (appWidgetId != -1 && widgetManager != null) {
                     AppWidgetProviderInfo info = widgetManager.getAppWidgetInfo(appWidgetId);
                     
-                    // תיקון למצבים בהם ה-provider חוזר כ-null אך ה-ID קיים במערכת
                     if (provider != null && info == null) {
                         try {
                             if (widgetManager.bindAppWidgetIdIfAllowed(appWidgetId, provider)) {
@@ -774,9 +773,9 @@ public class MainActivity extends Activity {
                 return;
             }
             
-            // 3. חזרה ממסך הגדרות פנימי של הווידג'ט
-            if (requestCode == REQUEST_CREATE_WIDGET && data != null) {
-                int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+            // 3. חזרה ממסך הגדרות פנימי של הווידג'ט - כאן מופעל הגיבוי למנוע Intent ריק
+            if (requestCode == REQUEST_CREATE_WIDGET) {
+                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, currentWidgetId) : currentWidgetId;
                 if (appWidgetId != -1 && widgetManager != null) {
                     currentWidgetId = appWidgetId;
                     saveWidgetId(currentWidgetId);
@@ -801,22 +800,25 @@ public class MainActivity extends Activity {
                     refreshViews();
                 }
             }
-        } else if (resultCode == RESULT_CANCELED && data != null) {
-            int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
-            if (appWidgetId != -1 && widgetHost != null) {
-                widgetHost.deleteAppWidgetId(appWidgetId);
+        } else if (resultCode == RESULT_CANCELED) {
+            // אם המשתמש ביטל את הפעולה, ננקה את ה-ID הזמני מהמארח
+            if (currentWidgetId != -1 && widgetHost != null) {
+                try {
+                    widgetHost.deleteAppWidgetId(currentWidgetId);
+                } catch (Exception e) {}
+                currentWidgetId = -1;
             }
         }
     }
 
     private void configureAndBuildWidget(int appWidgetId, AppWidgetProviderInfo info) {
+        currentWidgetId = appWidgetId; // סנכרון משתנה הגיבוי לפני היציאה למסך ההגדרות החיצוני
         if (info != null && info.configure != null) {
             Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE);
             intent.setComponent(info.configure);
             intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
             startActivityForResult(intent, REQUEST_CREATE_WIDGET);
         } else {
-            currentWidgetId = appWidgetId;
             saveWidgetId(currentWidgetId);
             createWidgetView(currentWidgetId, info);
         }
