@@ -9,7 +9,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -18,7 +17,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.EditText;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -70,7 +68,7 @@ public class MainActivity extends Activity {
     private boolean isCopyOperation = false;
 
     private int currentWidgetId = -1;
-    
+
     private AppItem appItemEditingNow = null;
     private FolderItem folderItemEditingNow = null;
 
@@ -133,11 +131,8 @@ public class MainActivity extends Activity {
             }
         }
 
+        // חיבור ל-RecyclerView לפי ה-ID המדויק ב-XML
         recyclerView = findViewById(R.id.launcher_recycler_view);
-        if (recyclerView == null) {
-            recyclerView = findViewById(R.id.recycler_view);
-        }
-        
         if (recyclerView != null) {
             recyclerView.setLayoutManager(new GridLayoutManager(this, 3));
         }
@@ -326,6 +321,36 @@ public class MainActivity extends Activity {
         }
         launcherItems.removeAll(itemsToRemove);
         saveLauncherState();
+    }
+
+    /**
+     * תפריט הקשר בלחיצה ארוכה על פריט ב-RecyclerView (עבור LauncherAdapter)
+     */
+    public void showContextMenu(View view, int position) {
+        if (position < 0 || position >= launcherItems.size()) return;
+
+        PopupMenu popup = createStyledPopupMenu(view);
+        LauncherItem item = launcherItems.get(position);
+
+        popup.getMenu().add(0, 1, 0, "העבר פריט");
+        popup.getMenu().add(0, 2, 1, "הסר מהמסך");
+
+        popup.setOnMenuItemClickListener(menuItem -> {
+            int id = menuItem.getItemId();
+            if (id == 1) {
+                pendingMoveItem = item;
+                pendingMovePosition = position;
+                isPickingDestination = true;
+                Toast.makeText(this, "בחר מיקום יעד להעברה", Toast.LENGTH_SHORT).show();
+            } else if (id == 2) {
+                launcherItems.remove(position);
+                saveLauncherState();
+                refreshViews();
+            }
+            return true;
+        });
+
+        popup.show();
     }
 
     public void selectWidget() {
