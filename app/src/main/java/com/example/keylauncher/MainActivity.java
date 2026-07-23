@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import com.google.gson.Gson;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -66,17 +67,18 @@ public class MainActivity extends Activity {
     private LauncherItem pendingMoveItem = null;
     private int pendingMovePosition = -1;
     private boolean isPickingDestination = false;
-    private boolean isCopyOperation = false;
 
-    // 🧩 תמיכה ב-2 ווידג'טים במקביל
     private int currentWidgetId1 = -1;
     private int currentWidgetId2 = -1;
-    private int pendingSlotForPick = 1; // 1 or 2
+    private int pendingSlotForPick = 1;
 
     private AppItem appItemEditingNow = null;
     private FolderItem folderItemEditingNow = null;
 
     private Map<Integer, Integer> shortcutPositionsMap = new HashMap<>();
+    
+    // 📞 משתנה לזיהוי לחיצה ארוכה על מקש החיוג
+    private boolean isCallKeyLongPressed = false;
 
     public static abstract class LauncherItem {
         public String title;
@@ -135,7 +137,6 @@ public class MainActivity extends Activity {
             }
         }
 
-        // 🖱️ הגדרות פוקוס ועכבר מתקדמות עבור ה-RecyclerView
         recyclerView = findViewById(R.id.launcher_recycler_view);
         if (recyclerView != null) {
             recyclerView.setLayoutManager(new GridLayoutManager(this, 3));
@@ -153,7 +154,6 @@ public class MainActivity extends Activity {
         widgetPlaceholderText = findViewById(R.id.widget_placeholder_text);
         widgetContainer = findViewById(R.id.widget_container);
         if (widgetContainer != null) {
-            // 🖱️ תמיכה בפוקוס ועכבר באזור הווידג'טים
             widgetContainer.setFocusable(true);
             widgetContainer.setFocusableInTouchMode(true);
             widgetContainer.setClickable(true);
@@ -181,7 +181,6 @@ public class MainActivity extends Activity {
             recyclerView.setAdapter(adapter);
         }
 
-        // 🧩 טעינת 2 הווידג'טים מהאחסון
         currentWidgetId1 = sharedPreferences.getInt("saved_widget_id_1", -1);
         currentWidgetId2 = sharedPreferences.getInt("saved_widget_id_2", -1);
         renderAllWidgets();
@@ -297,26 +296,36 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * 🔍 סריקה משופרת: מסירה אפליקציות שנמחקו ומוסיפה אוטומטית אפליקציות חדשות!
+     */
     private void syncAndCleanLauncherItems() {
         PackageManager pm = getPackageManager();
         Intent intent = new Intent(Intent.ACTION_MAIN, null);
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
         List<ResolveInfo> availableActivities = pm.queryIntentActivities(intent, 0);
 
-        Set<String> installedPackages = new HashSet<>();
+        Map<String, String> installedAppsMap = new HashMap<>();
         for (ResolveInfo ri : availableActivities) {
-            installedPackages.add(ri.activityInfo.packageName);
+            String pkg = ri.activityInfo.packageName;
+            if (!pkg.equals(getPackageName())) {
+                installedAppsMap.put(pkg, ri.loadLabel(pm).toString());
+            }
         }
 
+        Set<String> existingPackagesInLauncher = new HashSet<>();
         List<LauncherItem> itemsToRemove = new ArrayList<>();
 
+        // 1. הסרת אפליקציות שאינן מותקנות עוד
         for (LauncherItem item : launcherItems) {
             if (item.isFolder()) {
                 FolderItem folder = (FolderItem) item;
                 List<AppItem> appsInsideToRemove = new ArrayList<>();
                 for (AppItem app : folder.appsInside) {
-                    if (!installedPackages.contains(app.packageName)) {
+                    if (!installedAppsMap.containsKey(app.packageName)) {
                         appsInsideToRemove.add(app);
+                    } else {
+                        existingPackagesInLauncher.add(app.packageName);
                     }
                 }
                 folder.appsInside.removeAll(appsInsideToRemove);
@@ -325,12 +334,24 @@ public class MainActivity extends Activity {
                 }
             } else {
                 AppItem app = (AppItem) item;
-                if (!installedPackages.contains(app.packageName)) {
+                if (!installedAppsMap.containsKey(app.packageName)) {
                     itemsToRemove.add(app);
+                } else {
+                    existingPackagesInLauncher.add(app.packageName);
                 }
             }
         }
         launcherItems.removeAll(itemsToRemove);
+
+        // 2. זיהוי והוספה של אפליקציות חדשות שהותקנו במכשיר! ✨
+        for (Map.Entry<String, String> entry : installedAppsMap.entrySet()) {
+            String pkg = entry.getKey();
+            String label = entry.getValue();
+            if (!existingPackagesInLauncher.contains(pkg)) {
+                launcherItems.add(new AppItem(label, pkg));
+            }
+        }
+
         saveLauncherState();
     }
 
@@ -349,7 +370,7 @@ public class MainActivity extends Activity {
                 pendingMoveItem = item;
                 pendingMovePosition = position;
                 isPickingDestination = true;
-                Toast.makeText(this, "בחר מיקום יעד להעברה 🎯", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "נווט ליעד ולחץ אישור 🎯", Toast.LENGTH_SHORT).show();
             } else if (id == 2) {
                 launcherItems.remove(position);
                 saveLauncherState();
@@ -361,20 +382,18 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
-    // 🧩 בחירת ווידג'ט חדש מתוך 2 סלוטים אפשריים
     public void selectWidget() {
         if (widgetHost == null) {
             Toast.makeText(this, "מארח הווידג'טים לא אותחל כראוי ⚠️", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // קביעת הסלוט הפנוי (או החלפת השני אם שניהם מלאים)
         if (currentWidgetId1 == -1) {
             pendingSlotForPick = 1;
         } else if (currentWidgetId2 == -1) {
             pendingSlotForPick = 2;
         } else {
-            pendingSlotForPick = 2; // החלפת הווידג'ט השני במצב שניהם מלאים
+            pendingSlotForPick = 2;
         }
 
         try {
@@ -409,7 +428,6 @@ public class MainActivity extends Activity {
             .apply();
     }
 
-    // 🧩 רנדור שני הווידג'טים במסך בתוך ה-Container
     private void renderAllWidgets() {
         if (widgetContainer == null || widgetHost == null) return;
 
@@ -451,7 +469,6 @@ public class MainActivity extends Activity {
             layoutParams.setMargins(8, 8, 8, 8);
             hostView.setLayoutParams(layoutParams);
             
-            // 🖱️ מאפשר קבלת פוקוס מלאה מהעכבר והסמן
             hostView.setFocusable(true);
             hostView.setFocusableInTouchMode(true);
 
@@ -606,18 +623,39 @@ public class MainActivity extends Activity {
         }
     }
 
+    // 📞 זיהוי לחיצה ארוכה (מקשי 0-9 ומקש חיוג)
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
             WidgetKeyController.startActiveListening(this, keyCode);
             return true;
         }
+        
+        // 📞 לחיצה ארוכה על מקש החיוג -> פתיחת החייגן
+        if (keyCode == KeyEvent.KEYCODE_CALL) {
+            isCallKeyLongPressed = true;
+            try {
+                Intent dialIntent = new Intent(Intent.ACTION_DIAL);
+                startActivity(dialIntent);
+            } catch (Exception e) {
+                Toast.makeText(this, "לא ניתן לפתוח את החייגן ⚠️", Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        }
+
         return super.onKeyLongPress(keyCode, event);
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
+            return true;
+        }
+
+        // 📞 מעקב אחר מקש החיוג לצורך הבחנה בין לחיצה קצרה לארוכה
+        if (keyCode == KeyEvent.KEYCODE_CALL) {
+            isCallKeyLongPressed = false;
+            event.startTracking();
             return true;
         }
 
@@ -646,6 +684,22 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
+    // 📞 טיפול בלחיצה קצרה על מקש החיוג
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_CALL) {
+            if (!isCallKeyLongPressed) {
+                // לחיצה קצרה: רענון הלאנצ'ר והפעלת העכבר/פוקוס
+                syncAndCleanLauncherItems();
+                refreshViews();
+                Toast.makeText(this, "רענון לאנצ'ר והפעלת עכבר 🖱️🔄", Toast.LENGTH_SHORT).show();
+            }
+            isCallKeyLongPressed = false;
+            return true;
+        }
+        return super.onKeyUp(keyCode, event);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -670,45 +724,69 @@ public class MainActivity extends Activity {
 
     public void cancelMoveMode() {
         isPickingDestination = false;
-        isCopyOperation = false;
         pendingMoveItem = null;
         pendingMovePosition = -1;
     }
 
-    public void handleDestinationSelected(int targetPosition) {
-        if (!isCopyOperation && pendingMovePosition == targetPosition) {
+    /**
+     * 🎯 ניווט בפוקוס עד המיקום הרצוי + הקפצת תפריט בחירה (החלף מיקום / מזג לתיקייה)
+     */
+    public void handleDestinationSelected(int targetPosition, View targetView) {
+        if (pendingMovePosition == targetPosition) {
             cancelMoveMode();
             return;
         }
 
+        PopupMenu popup = createStyledPopupMenu(targetView != null ? targetView : recyclerView);
+        popup.getMenu().add(0, 1, 0, "החליפו מיקומים 🔄");
+        popup.getMenu().add(0, 2, 1, "מזגו לתיקייה 📁");
+        popup.getMenu().add(0, 3, 2, "ביטול ❌");
+
+        popup.setOnMenuItemClickListener(menuItem -> {
+            int id = menuItem.getItemId();
+            if (id == 1) {
+                // החלפת מיקומים ברשימה (Swap)
+                LauncherItem targetItem = launcherItems.get(targetPosition);
+                launcherItems.set(pendingMovePosition, targetItem);
+                launcherItems.set(targetPosition, pendingMoveItem);
+                saveLauncherState();
+                refreshViews();
+            } else if (id == 2) {
+                // מיזוג לתוך תיקייה
+                performMergeToFolder(targetPosition);
+            }
+            cancelMoveMode();
+            return true;
+        });
+
+        popup.setOnDismissListener(p -> cancelMoveMode());
+        popup.show();
+    }
+
+    private void performMergeToFolder(int targetPosition) {
         LauncherItem targetItem = launcherItems.get(targetPosition);
         if (pendingMoveItem.isFolder()) {
-            cancelMoveMode();
+            Toast.makeText(this, "לא ניתן למזג תיקייה לתוך תיקייה ⚠️", Toast.LENGTH_SHORT).show();
             return;
         }
 
         AppItem sourceApp = (AppItem) pendingMoveItem;
-        AppItem appToPlace = isCopyOperation ? new AppItem(sourceApp.title, sourceApp.packageName) : sourceApp;
 
         if (targetItem.isFolder()) {
             FolderItem folder = (FolderItem) targetItem;
-            folder.appsInside.add(appToPlace);
-            if (!isCopyOperation) {
-                launcherItems.remove(pendingMovePosition);
-            }
+            folder.appsInside.add(sourceApp);
+            launcherItems.remove(pendingMovePosition);
         } else {
             FolderItem newFolder = new FolderItem("תיקייה חדשה ✨");
             newFolder.appsInside.add((AppItem) targetItem);
-            newFolder.appsInside.add(appToPlace);
-            if (!isCopyOperation) {
-                launcherItems.remove(pendingMovePosition);
-            }
-            launcherItems.set(targetPosition, newFolder);
+            newFolder.appsInside.add(sourceApp);
+            launcherItems.remove(pendingMovePosition);
+            int adjustedTarget = (pendingMovePosition < targetPosition) ? targetPosition - 1 : targetPosition;
+            launcherItems.set(adjustedTarget, newFolder);
         }
 
-        refreshViews();
         saveLauncherState();
-        cancelMoveMode();
+        refreshViews();
     }
 
     public boolean isPickingDestination() {
