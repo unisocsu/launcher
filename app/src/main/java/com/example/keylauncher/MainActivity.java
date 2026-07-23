@@ -17,6 +17,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -67,7 +68,10 @@ public class MainActivity extends Activity {
     private boolean isPickingDestination = false;
     private boolean isCopyOperation = false;
 
-    private int currentWidgetId = -1;
+    // 🧩 תמיכה ב-2 ווידג'טים במקביל
+    private int currentWidgetId1 = -1;
+    private int currentWidgetId2 = -1;
+    private int pendingSlotForPick = 1; // 1 or 2
 
     private AppItem appItemEditingNow = null;
     private FolderItem folderItemEditingNow = null;
@@ -131,10 +135,13 @@ public class MainActivity extends Activity {
             }
         }
 
-        // חיבור ל-RecyclerView לפי ה-ID המדויק ב-XML
+        // 🖱️ הגדרות פוקוס ועכבר מתקדמות עבור ה-RecyclerView
         recyclerView = findViewById(R.id.launcher_recycler_view);
         if (recyclerView != null) {
             recyclerView.setLayoutManager(new GridLayoutManager(this, 3));
+            recyclerView.setFocusable(true);
+            recyclerView.setFocusableInTouchMode(true);
+            recyclerView.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         }
 
         dateTimeTextView = findViewById(R.id.date_time_text);
@@ -146,6 +153,10 @@ public class MainActivity extends Activity {
         widgetPlaceholderText = findViewById(R.id.widget_placeholder_text);
         widgetContainer = findViewById(R.id.widget_container);
         if (widgetContainer != null) {
+            // 🖱️ תמיכה בפוקוס ועכבר באזור הווידג'טים
+            widgetContainer.setFocusable(true);
+            widgetContainer.setFocusableInTouchMode(true);
+            widgetContainer.setClickable(true);
             widgetContainer.setOnLongClickListener(v -> {
                 showWidgetContextMenu(v);
                 return true;
@@ -156,7 +167,7 @@ public class MainActivity extends Activity {
             widgetManager = AppWidgetManager.getInstance(this);
             widgetHost = new AppWidgetHost(this, HOST_ID);
         } catch (Exception e) {
-            Toast.makeText(this, "התקן זה לא תומך בווידג'טים", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "התקן זה לא תומך בווידג'טים ⚠️", Toast.LENGTH_LONG).show();
         }
 
         if (!loadLauncherState()) {
@@ -170,10 +181,10 @@ public class MainActivity extends Activity {
             recyclerView.setAdapter(adapter);
         }
 
-        currentWidgetId = sharedPreferences.getInt("saved_widget_id", -1);
-        if (currentWidgetId != -1 && widgetManager != null) {
-            createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
-        }
+        // 🧩 טעינת 2 הווידג'טים מהאחסון
+        currentWidgetId1 = sharedPreferences.getInt("saved_widget_id_1", -1);
+        currentWidgetId2 = sharedPreferences.getInt("saved_widget_id_2", -1);
+        renderAllWidgets();
     }
 
     private void startTimeUpdate() {
@@ -323,17 +334,14 @@ public class MainActivity extends Activity {
         saveLauncherState();
     }
 
-    /**
-     * תפריט הקשר בלחיצה ארוכה על פריט ב-RecyclerView (עבור LauncherAdapter)
-     */
     public void showContextMenu(View view, int position) {
         if (position < 0 || position >= launcherItems.size()) return;
 
         PopupMenu popup = createStyledPopupMenu(view);
         LauncherItem item = launcherItems.get(position);
 
-        popup.getMenu().add(0, 1, 0, "העבר פריט");
-        popup.getMenu().add(0, 2, 1, "הסר מהמסך");
+        popup.getMenu().add(0, 1, 0, "העבר פריט 🔄");
+        popup.getMenu().add(0, 2, 1, "הסר מהמסך 🗑️");
 
         popup.setOnMenuItemClickListener(menuItem -> {
             int id = menuItem.getItemId();
@@ -341,7 +349,7 @@ public class MainActivity extends Activity {
                 pendingMoveItem = item;
                 pendingMovePosition = position;
                 isPickingDestination = true;
-                Toast.makeText(this, "בחר מיקום יעד להעברה", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "בחר מיקום יעד להעברה 🎯", Toast.LENGTH_SHORT).show();
             } else if (id == 2) {
                 launcherItems.remove(position);
                 saveLauncherState();
@@ -353,14 +361,27 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
+    // 🧩 בחירת ווידג'ט חדש מתוך 2 סלוטים אפשריים
     public void selectWidget() {
         if (widgetHost == null) {
-            Toast.makeText(this, "מארח הווידג'טים לא אותחל כראוי", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "מארח הווידג'טים לא אותחל כראוי ⚠️", Toast.LENGTH_SHORT).show();
             return;
         }
+
+        // קביעת הסלוט הפנוי (או החלפת השני אם שניהם מלאים)
+        if (currentWidgetId1 == -1) {
+            pendingSlotForPick = 1;
+        } else if (currentWidgetId2 == -1) {
+            pendingSlotForPick = 2;
+        } else {
+            pendingSlotForPick = 2; // החלפת הווידג'ט השני במצב שניהם מלאים
+        }
+
         try {
             int appWidgetId = widgetHost.allocateAppWidgetId();
-            currentWidgetId = appWidgetId;
+            if (pendingSlotForPick == 1) currentWidgetId1 = appWidgetId;
+            else currentWidgetId2 = appWidgetId;
+
             Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
             pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
             startActivityForResult(pickIntent, REQUEST_PICK_WIDGET);
@@ -370,72 +391,88 @@ public class MainActivity extends Activity {
     }
 
     private void configureAndBuildWidget(int appWidgetId, AppWidgetProviderInfo info) {
-        currentWidgetId = appWidgetId;
         if (info != null && info.configure != null) {
             Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE);
             intent.setComponent(info.configure);
             intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
             startActivityForResult(intent, REQUEST_CREATE_WIDGET);
         } else {
-            saveWidgetId(currentWidgetId);
-            createWidgetView(currentWidgetId, info);
+            saveWidgetIds();
+            renderAllWidgets();
         }
     }
 
-    private void saveWidgetId(int widgetId) {
-        getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit().putInt("saved_widget_id", widgetId).apply();
+    private void saveWidgetIds() {
+        getSharedPreferences("LauncherPrefs", MODE_PRIVATE).edit()
+            .putInt("saved_widget_id_1", currentWidgetId1)
+            .putInt("saved_widget_id_2", currentWidgetId2)
+            .apply();
     }
 
-    private void createWidgetView(int appWidgetId, AppWidgetProviderInfo appWidgetInfo) {
+    // 🧩 רנדור שני הווידג'טים במסך בתוך ה-Container
+    private void renderAllWidgets() {
         if (widgetContainer == null || widgetHost == null) return;
 
         widgetContainer.removeAllViews();
 
-        if (appWidgetInfo == null) {
-            if (widgetPlaceholderText != null) {
-                widgetPlaceholderText.setVisibility(View.VISIBLE);
+        boolean hasWidget = false;
+
+        if (currentWidgetId1 != -1 && widgetManager != null) {
+            AppWidgetProviderInfo info1 = widgetManager.getAppWidgetInfo(currentWidgetId1);
+            if (info1 != null) {
+                addSingleWidgetViewToContainer(currentWidgetId1, info1);
+                hasWidget = true;
             }
-            return;
         }
 
-        try {
-            if (widgetPlaceholderText != null) {
-                widgetPlaceholderText.setVisibility(View.GONE);
+        if (currentWidgetId2 != -1 && widgetManager != null) {
+            AppWidgetProviderInfo info2 = widgetManager.getAppWidgetInfo(currentWidgetId2);
+            if (info2 != null) {
+                addSingleWidgetViewToContainer(currentWidgetId2, info2);
+                hasWidget = true;
             }
+        }
 
+        if (widgetPlaceholderText != null) {
+            widgetPlaceholderText.setVisibility(hasWidget ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private void addSingleWidgetViewToContainer(int appWidgetId, AppWidgetProviderInfo appWidgetInfo) {
+        try {
             AppWidgetHostView hostView = widgetHost.createView(this, appWidgetId, appWidgetInfo);
             hostView.setAppWidget(appWidgetId, appWidgetInfo);
 
-            ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(
+            LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    1.0f
             );
+            layoutParams.setMargins(8, 8, 8, 8);
             hostView.setLayoutParams(layoutParams);
+            
+            // 🖱️ מאפשר קבלת פוקוס מלאה מהעכבר והסמן
             hostView.setFocusable(true);
-            hostView.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+            hostView.setFocusableInTouchMode(true);
 
             widgetContainer.addView(hostView);
             hostView.postInvalidate();
             widgetContainer.requestLayout();
-
         } catch (Exception e) {
-            if (widgetPlaceholderText != null) {
-                widgetPlaceholderText.setVisibility(View.VISIBLE);
-            }
-            Toast.makeText(this, "שגיאה ברנדור הווידג'ט: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "שגיאה ברינדור: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
     public void showWidgetContextMenu(View anchorView) {
         PopupMenu popup = createStyledPopupMenu(anchorView);
-        popup.getMenu().add(0, 10, 0, "הסר ווידג'ט נוכחי");
-        popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש");
-        popup.getMenu().add(0, 2, 2, "ביטול");
+        popup.getMenu().add(0, 10, 0, "הסר ווידג'טים 🗑️");
+        popup.getMenu().add(0, 11, 1, "הוסף ווידג'ט חדש ➕");
+        popup.getMenu().add(0, 2, 2, "ביטול ❌");
 
         popup.setOnMenuItemClickListener(item -> {
             int itemId = item.getItemId();
             if (itemId == 10) {
-                removeCurrentWidget();
+                removeCurrentWidgets();
             } else if (itemId == 11) {
                 selectWidget();
             }
@@ -444,21 +481,23 @@ public class MainActivity extends Activity {
         popup.show();
     }
 
-    private void removeCurrentWidget() {
+    private void removeCurrentWidgets() {
         if (widgetContainer != null) {
             widgetContainer.removeAllViews();
         }
         if (widgetPlaceholderText != null) {
             widgetPlaceholderText.setVisibility(View.VISIBLE);
         }
-        if (currentWidgetId != -1 && widgetHost != null) {
+        if (widgetHost != null) {
             try {
-                widgetHost.deleteAppWidgetId(currentWidgetId);
+                if (currentWidgetId1 != -1) widgetHost.deleteAppWidgetId(currentWidgetId1);
+                if (currentWidgetId2 != -1) widgetHost.deleteAppWidgetId(currentWidgetId2);
             } catch (Exception e) {}
-            currentWidgetId = -1;
-            saveWidgetId(-1);
         }
-        Toast.makeText(this, "הווידג'ט הוסר", Toast.LENGTH_SHORT).show();
+        currentWidgetId1 = -1;
+        currentWidgetId2 = -1;
+        saveWidgetIds();
+        Toast.makeText(this, "הווידג'טים הוסרו ✨", Toast.LENGTH_SHORT).show();
     }
 
     private PopupMenu createStyledPopupMenu(View anchorView) {
@@ -474,19 +513,22 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
+        int activeWidgetId = (pendingSlotForPick == 1) ? currentWidgetId1 : currentWidgetId2;
+
         if (resultCode == RESULT_OK) {
             if (requestCode == REQUEST_BIND_WIDGET) {
-                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, currentWidgetId) : currentWidgetId;
+                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, activeWidgetId) : activeWidgetId;
                 if (appWidgetId != -1 && widgetManager != null) {
-                    currentWidgetId = appWidgetId;
-                    saveWidgetId(currentWidgetId);
-                    createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                    if (pendingSlotForPick == 1) currentWidgetId1 = appWidgetId;
+                    else currentWidgetId2 = appWidgetId;
+                    saveWidgetIds();
+                    renderAllWidgets();
                 }
                 return;
             }
 
             if (requestCode == REQUEST_PICK_WIDGET) {
-                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, currentWidgetId) : currentWidgetId;
+                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, activeWidgetId) : activeWidgetId;
                 android.content.ComponentName provider = (data != null) ? data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER) : null;
 
                 if (appWidgetId != -1 && widgetManager != null) {
@@ -511,18 +553,19 @@ public class MainActivity extends Activity {
                     if (info != null) {
                         configureAndBuildWidget(appWidgetId, info);
                     } else {
-                        Toast.makeText(this, "שגיאה: לא ניתן לקרוא את נתוני הווידג'ט", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "שגיאה: לא ניתן לקרוא את נתוני הווידג'ט ⚠️", Toast.LENGTH_SHORT).show();
                     }
                 }
                 return;
             }
 
             if (requestCode == REQUEST_CREATE_WIDGET) {
-                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, currentWidgetId) : currentWidgetId;
+                int appWidgetId = (data != null) ? data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, activeWidgetId) : activeWidgetId;
                 if (appWidgetId != -1 && widgetManager != null) {
-                    currentWidgetId = appWidgetId;
-                    saveWidgetId(currentWidgetId);
-                    createWidgetView(currentWidgetId, widgetManager.getAppWidgetInfo(currentWidgetId));
+                    if (pendingSlotForPick == 1) currentWidgetId1 = appWidgetId;
+                    else currentWidgetId2 = appWidgetId;
+                    saveWidgetIds();
+                    renderAllWidgets();
                 }
                 return;
             }
@@ -542,11 +585,12 @@ public class MainActivity extends Activity {
                 }
             }
         } else if (resultCode == RESULT_CANCELED) {
-            if (currentWidgetId != -1 && widgetHost != null) {
+            if (activeWidgetId != -1 && widgetHost != null) {
                 try {
-                    widgetHost.deleteAppWidgetId(currentWidgetId);
+                    widgetHost.deleteAppWidgetId(activeWidgetId);
                 } catch (Exception e) {}
-                currentWidgetId = -1;
+                if (pendingSlotForPick == 1) currentWidgetId1 = -1;
+                else currentWidgetId2 = -1;
             }
         }
     }
@@ -613,22 +657,10 @@ public class MainActivity extends Activity {
         }
 
         SharedPreferences sharedPreferences = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
-        currentWidgetId = sharedPreferences.getInt("saved_widget_id", -1);
+        currentWidgetId1 = sharedPreferences.getInt("saved_widget_id_1", -1);
+        currentWidgetId2 = sharedPreferences.getInt("saved_widget_id_2", -1);
 
-        if (currentWidgetId != -1 && widgetManager != null) {
-            AppWidgetProviderInfo info = widgetManager.getAppWidgetInfo(currentWidgetId);
-            if (info != null) {
-                createWidgetView(currentWidgetId, info);
-            } else {
-                if (widgetPlaceholderText != null) {
-                    widgetPlaceholderText.setVisibility(View.VISIBLE);
-                }
-            }
-        } else {
-            if (widgetPlaceholderText != null) {
-                widgetPlaceholderText.setVisibility(View.VISIBLE);
-            }
-        }
+        renderAllWidgets();
 
         if (adapter != null) {
             syncAndCleanLauncherItems();
@@ -665,7 +697,7 @@ public class MainActivity extends Activity {
                 launcherItems.remove(pendingMovePosition);
             }
         } else {
-            FolderItem newFolder = new FolderItem("תיקייה חדשה");
+            FolderItem newFolder = new FolderItem("תיקייה חדשה ✨");
             newFolder.appsInside.add((AppItem) targetItem);
             newFolder.appsInside.add(appToPlace);
             if (!isCopyOperation) {
@@ -694,6 +726,8 @@ public class MainActivity extends Activity {
 
         RecyclerView folderRecyclerView = dialogView.findViewById(R.id.folder_recycler_view);
         folderRecyclerView.setLayoutManager(new GridLayoutManager(this, 3));
+        folderRecyclerView.setFocusable(true);
+        folderRecyclerView.setFocusableInTouchMode(true);
 
         List<LauncherItem> folderContents = new ArrayList<>(folder.appsInside);
         LauncherAdapter folderAdapter = new LauncherAdapter(this, folderContents);
