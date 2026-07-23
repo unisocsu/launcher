@@ -1,5 +1,6 @@
 package com.example.keylauncher;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
@@ -16,134 +17,130 @@ import java.util.List;
 
 public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHolder> {
 
-    private final MainActivity context;
-    private final List<MainActivity.LauncherItem> items;
-    private final PackageManager packageManager;
+    private final MainActivity activityContext;
+    private final List<MainActivity.LauncherItem> items;
+    private final PackageManager packageManager;
 
-    public LauncherAdapter(MainActivity context, List<MainActivity.LauncherItem> items) {
-        this.context = context;
-        this.items = items;
-        this.packageManager = context.getPackageManager();
-    }
+    public LauncherAdapter(MainActivity context, List<MainActivity.LauncherItem> items) {
+        this.activityContext = context;
+        this.items = items;
+        this.packageManager = context.getPackageManager();
+    }
 
-    @NonNull
-    @Override
-    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(context).inflate(R.layout.item_launcher, parent, false);
-        return new ViewHolder(view);
-    }
+    @NonNull
+    @Override
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_launcher, parent, false);
+        return new ViewHolder(view);
+    }
 
-    @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        MainActivity.LauncherItem item = items.get(position);
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        MainActivity.LauncherItem item = items.get(position);
 
-        // 🏷️ הצגת שם האפליקציה / התיקייה (אם יש שם מותאם אישית)
-        String displayTitle = (item.customTitle != null && !item.customTitle.isEmpty()) 
-                ? item.customTitle 
-                : item.title;
-        holder.titleTextView.setText(displayTitle);
+        // 🏷️ הצגת שם האפליקציה / התיקייה
+        String displayTitle = (item.customTitle != null && !item.customTitle.isEmpty()) 
+                ? item.customTitle 
+                : item.title;
+        holder.titleTextView.setText(displayTitle);
 
-        // 🖱️ תמיכה בפוקוס, מקשים ועכבר
-        holder.itemView.setFocusable(true);
-        holder.itemView.setFocusableInTouchMode(true);
+        // 🖱️ תמיכה בפוקוס, מקשים ועכבר
+        holder.itemView.setFocusable(true);
+        holder.itemView.setFocusableInTouchMode(true);
 
-        // 🖼️ טעינת האייקון המתאים
-        if (item.isFolder()) {
-            MainActivity.FolderItem folderItem = (MainActivity.FolderItem) item;
-            loadFolderIcon(folderItem, holder.iconImageView);
-        } else {
-            MainActivity.AppItem appItem = (MainActivity.AppItem) item;
-            loadAppIcon(appItem, holder.iconImageView);
-        }
+        // 🖼️ טעינת האייקון
+        if (item.isFolder()) {
+            loadFolderIcon((MainActivity.FolderItem) item, holder.iconImageView);
+        } else {
+            loadAppIcon((MainActivity.AppItem) item, holder.iconImageView);
+        }
 
-        // 🎯 בלחיצה על פריט (מקש אמצע / OK / עכבר)
-        holder.itemView.setOnClickListener(v -> {
-            if (context.isPickingDestination()) {
-                // 🔄 אם אנחנו במצב העברת מיקום / מיזוג -> פותחים את תפריט הבחירה במיקום הרצוי
-                context.handleDestinationSelected(position, holder.itemView);
-            } else if (item.isFolder()) {
-                // 📁 פתיחת תיקייה
-                context.openFolder((MainActivity.FolderItem) item);
-            } else {
-                // 🚀 הפעלת אפליקציה
-                MainActivity.AppItem appItem = (MainActivity.AppItem) item;
-                Intent launchIntent = packageManager.getLaunchIntentForPackage(appItem.packageName);
-                if (launchIntent != null) {
-                    context.startActivity(launchIntent);
-                }
-            }
-        });
+        // 🎯 לחיצה רגילה
+        holder.itemView.setOnClickListener(v -> {
+            if (activityContext.isPickingDestination()) {
+                activityContext.handleDestinationSelected(position, holder.itemView);
+            } else if (item.isFolder()) {
+                activityContext.openFolder((MainActivity.FolderItem) item);
+            } else {
+                MainActivity.AppItem appItem = (MainActivity.AppItem) item;
+                Intent launchIntent = packageManager.getLaunchIntentForPackage(appItem.packageName);
+                if (launchIntent != null) {
+                    activityContext.startActivity(launchIntent);
+                }
+            }
+        });
 
-        // ⏳ בלחיצה ארוכה -> פתיחת תפריט האפשרויות (העברה / הסרה)
-        holder.itemView.setOnLongClickListener(v -> {
-            if (!context.isPickingDestination()) {
-                context.showContextMenu(holder.itemView, position);
-                return true;
-            }
-            return false;
-        });
-    }
+        // ⏳ לחיצה ארוכה
+        holder.itemView.setOnLongClickListener(v -> {
+            if (!activityContext.isPickingDestination()) {
+                activityContext.showContextMenu(holder.itemView, position);
+                return true;
+            }
+            return false;
+        });
+    }
 
-    @Override
-    public int getItemCount() {
-        return items != null ? items.size() : 0;
-    }
+    @Override
+    public int getItemCount() {
+        return items != null ? items.size() : 0;
+    }
 
-    // 🖼️ טעינת אייקון אפליקציה
-    private void loadAppIcon(MainActivity.AppItem appItem, ImageView imageView) {
-        if (appItem.customIconUri != null) {
-            try {
-                InputStream inputStream = context.getContentResolver().openInputStream(Uri.parse(appItem.customIconUri));
-                Drawable drawable = Drawable.createFromStream(inputStream, appItem.customIconUri);
-                if (drawable != null) {
-                    imageView.setImageDrawable(drawable);
-                    return;
-                }
-            } catch (Exception e) {
-                /* ברירת מחדל במידה והתמונה המותאמת לא זמינה */
-            }
-        }
+    // 🖼️ טעינת אייקון אפליקציה עם סגירה בטוחה של ה-Stream
+    private void loadAppIcon(MainActivity.AppItem appItem, ImageView imageView) {
+        if (appItem.customIconUri != null) {
+            try (InputStream inputStream = activityContext.getContentResolver().openInputStream(Uri.parse(appItem.customIconUri))) {
+                if (inputStream != null) {
+                    Drawable drawable = Drawable.createFromStream(inputStream, appItem.customIconUri);
+                    if (drawable != null) {
+                        imageView.setImageDrawable(drawable);
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                /* נמשיך לאייקון המקורי אם הייתה שגיאה בקריאת הקובץ */
+            }
+        }
 
-        try {
-            Drawable icon = packageManager.getApplicationIcon(appItem.packageName);
-            imageView.setImageDrawable(icon);
-        } catch (PackageManager.NameNotFoundException e) {
-            imageView.setImageResource(android.R.drawable.sym_def_app_icon);
-        }
-    }
+        try {
+            Drawable icon = packageManager.getApplicationIcon(appItem.packageName);
+            imageView.setImageDrawable(icon);
+        } catch (PackageManager.NameNotFoundException e) {
+            imageView.setImageResource(android.R.drawable.sym_def_app_icon);
+        }
+    }
 
-    // 📁 טעינת אייקון תיקייה
-    private void loadFolderIcon(MainActivity.FolderItem folderItem, ImageView imageView) {
-        if (folderItem.customIconPath != null) {
-            try {
-                InputStream inputStream = context.getContentResolver().openInputStream(Uri.parse(folderItem.customIconPath));
-                Drawable drawable = Drawable.createFromStream(inputStream, folderItem.customIconPath);
-                if (drawable != null) {
-                    imageView.setImageDrawable(drawable);
-                    return;
-                }
-            } catch (Exception e) {
-                /* ברירת מחדל אם התמונה המותאמת נכשלה */
-            }
-        }
+    // 📁 טעינת אייקון תיקייה
+    private void loadFolderIcon(MainActivity.FolderItem folderItem, ImageView imageView) {
+        if (folderItem.customIconPath != null) {
+            try (InputStream inputStream = activityContext.getContentResolver().openInputStream(Uri.parse(folderItem.customIconPath))) {
+                if (inputStream != null) {
+                    Drawable drawable = Drawable.createFromStream(inputStream, folderItem.customIconPath);
+                    if (drawable != null) {
+                        imageView.setImageDrawable(drawable);
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                /* תמונה מותאמת לא זמינה */
+            }
+        }
 
-        if (folderItem.useFirstAppIcon && !folderItem.appsInside.isEmpty()) {
-            loadAppIcon(folderItem.appsInside.get(0), imageView);
-            return;
-        }
+        if (folderItem.useFirstAppIcon && !folderItem.appsInside.isEmpty()) {
+            loadAppIcon(folderItem.appsInside.get(0), imageView);
+            return;
+        }
 
-        // אייקון ברירת מחדל של תיקייה
-        imageView.setImageResource(android.R.drawable.ic_dialog_info);
-    }
+        imageView.setImageResource(android.R.drawable.ic_dialog_info);
+    }
 
-    public static class ViewHolder extends RecyclerView.ViewHolder {
-        ImageView iconImageView;
-        TextView titleTextView;
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        final ImageView iconImageView;
+        final TextView titleTextView;
 
-        public ViewHolder(@NonNull View itemView) {
-            super(itemView);
-            iconImageView = itemView.findViewById(R.id.item_icon);
-            titleTextView = itemView.findViewById(R.id.item_title);
-        }
-    }
+        public ViewHolder(@NonNull View itemView) {
+            super(itemView);
+            iconImageView = itemView.findViewById(R.id.item_icon);
+            titleTextView = itemView.findViewById(R.id.item_title);
+        }
+    }
 }
