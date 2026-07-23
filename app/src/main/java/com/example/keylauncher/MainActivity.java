@@ -14,6 +14,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -186,6 +188,86 @@ public class MainActivity extends Activity {
         renderAllWidgets();
     }
 
+    // ==========================================================
+    // 📜 1. יצירת תפריט ספריית המערכת (Options Menu)
+    // ==========================================================
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        menu.add(0, 1, 0, "חיפוש מהיר 🔍");
+        menu.add(0, 2, 1, "הוסף ווידג'ט ➕");
+        menu.add(0, 3, 2, "הסר ווידג'טים 🗑️");
+        menu.add(0, 4, 3, "הסתרת אפליקציות 🙈");
+        menu.add(0, 5, 4, "רענון לאנצ'ר 🔄");
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case 1:
+                // 🔍 פתיחת דיאלוג החיפוש המהיר
+                new AppSearchDialog(this, launcherItems).show();
+                return true;
+            case 2:
+                // 🧩 הוספת ווידג'ט
+                selectWidget();
+                return true;
+            case 3:
+                // 🗑️ הסרת ווידג'טים
+                removeCurrentWidgets();
+                return true;
+            case 4:
+                // 🙈 פתיחת חלון הסתרת אפליקציות
+                showHideAppsDialog();
+                return true;
+            case 5:
+                // 🔄 רענון
+                syncAndCleanLauncherItems();
+                refreshViews();
+                Toast.makeText(this, "הלאנצ'ר רוענן בהצלחה 🔄✨", Toast.LENGTH_SHORT).show();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    // 🙈 דיאלוג מובנה לבחירת אפליקציות להסתרה
+    private void showHideAppsDialog() {
+        PackageManager pm = getPackageManager();
+        Intent intent = new Intent(Intent.ACTION_MAIN, null);
+        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> availableActivities = pm.queryIntentActivities(intent, 0);
+
+        List<String> appNames = new ArrayList<>();
+        List<String> packageNames = new ArrayList<>();
+        Set<String> hiddenApps = HiddenAppsManager.getHiddenPackages(this);
+
+        for (ResolveInfo ri : availableActivities) {
+            String pkg = ri.activityInfo.packageName;
+            if (!pkg.equals(getPackageName())) {
+                appNames.add(ri.loadLabel(pm).toString());
+                packageNames.add(pkg);
+            }
+        }
+
+        boolean[] checkedItems = new boolean[packageNames.size()];
+        for (int i = 0; i < packageNames.size(); i++) {
+            checkedItems[i] = hiddenApps.contains(packageNames.get(i));
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("בחר אפליקציות להסתרה 🙈");
+        builder.setMultiChoiceItems(appNames.toArray(new CharSequence[0]), checkedItems, (dialog, which, isChecked) -> {
+            HiddenAppsManager.setAppHidden(MainActivity.this, packageNames.get(which), isChecked);
+        });
+        builder.setPositiveButton("אישור 👍", (dialog, which) -> {
+            syncAndCleanLauncherItems();
+            refreshViews();
+        });
+        builder.setNegativeButton("ביטול ❌", null);
+        builder.show();
+    }
+
     private void startTimeUpdate() {
         timeRunnable = new Runnable() {
             @Override
@@ -235,11 +317,13 @@ public class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
         List<ResolveInfo> availableActivities = pm.queryIntentActivities(intent, 0);
 
+        Set<String> hiddenApps = HiddenAppsManager.getHiddenPackages(this);
+
         for (ResolveInfo ri : availableActivities) {
             String label = ri.loadLabel(pm).toString();
             String packageName = ri.activityInfo.packageName;
 
-            if (!packageName.equals(getPackageName())) {
+            if (!packageName.equals(getPackageName()) && !hiddenApps.contains(packageName)) {
                 launcherItems.add(new AppItem(label, packageName));
             }
         }
@@ -297,7 +381,7 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 🔍 סריקה משופרת: מסירה אפליקציות שנמחקו ומוסיפה אוטומטית אפליקציות חדשות!
+     * 🔍 סריקה וסנכרון: מסירה אפליקציות מוסתרות/נמחוקות ומוסיפה אפליקציות חדשות!
      */
     private void syncAndCleanLauncherItems() {
         PackageManager pm = getPackageManager();
@@ -305,10 +389,12 @@ public class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
         List<ResolveInfo> availableActivities = pm.queryIntentActivities(intent, 0);
 
+        Set<String> hiddenApps = HiddenAppsManager.getHiddenPackages(this);
+
         Map<String, String> installedAppsMap = new HashMap<>();
         for (ResolveInfo ri : availableActivities) {
             String pkg = ri.activityInfo.packageName;
-            if (!pkg.equals(getPackageName())) {
+            if (!pkg.equals(getPackageName()) && !hiddenApps.contains(pkg)) {
                 installedAppsMap.put(pkg, ri.loadLabel(pm).toString());
             }
         }
@@ -316,7 +402,6 @@ public class MainActivity extends Activity {
         Set<String> existingPackagesInLauncher = new HashSet<>();
         List<LauncherItem> itemsToRemove = new ArrayList<>();
 
-        // 1. הסרת אפליקציות שאינן מותקנות עוד
         for (LauncherItem item : launcherItems) {
             if (item.isFolder()) {
                 FolderItem folder = (FolderItem) item;
@@ -343,7 +428,6 @@ public class MainActivity extends Activity {
         }
         launcherItems.removeAll(itemsToRemove);
 
-        // 2. זיהוי והוספה של אפליקציות חדשות שהותקנו במכשיר! ✨
         for (Map.Entry<String, String> entry : installedAppsMap.entrySet()) {
             String pkg = entry.getKey();
             String label = entry.getValue();
@@ -623,7 +707,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // 📞 זיהוי לחיצה ארוכה (מקשי 0-9 ומקש חיוג)
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
@@ -631,7 +714,7 @@ public class MainActivity extends Activity {
             return true;
         }
         
-        // 📞 לחיצה ארוכה על מקש החיוג -> פתיחת החייגן
+        // 📞 לחיצה ארוכה על החיוג -> חייגן
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             isCallKeyLongPressed = true;
             try {
@@ -652,7 +735,12 @@ public class MainActivity extends Activity {
             return true;
         }
 
-        // 📞 מעקב אחר מקש החיוג לצורך הבחנה בין לחיצה קצרה לארוכה
+        // 📋 מקש ה-MENU הפיזי -> פתיחת תפריט ספריית המערכת!
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            openOptionsMenu();
+            return true;
+        }
+
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             isCallKeyLongPressed = false;
             event.startTracking();
@@ -684,12 +772,11 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
-    // 📞 טיפול בלחיצה קצרה על מקש החיוג
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             if (!isCallKeyLongPressed) {
-                // לחיצה קצרה: רענון הלאנצ'ר והפעלת העכבר/פוקוס
+                // לחיצה קצרה על חיוג -> רענון הלאנצ'ר
                 syncAndCleanLauncherItems();
                 refreshViews();
                 Toast.makeText(this, "רענון לאנצ'ר והפעלת עכבר 🖱️🔄", Toast.LENGTH_SHORT).show();
@@ -728,9 +815,6 @@ public class MainActivity extends Activity {
         pendingMovePosition = -1;
     }
 
-    /**
-     * 🎯 ניווט בפוקוס עד המיקום הרצוי + הקפצת תפריט בחירה (החלף מיקום / מזג לתיקייה)
-     */
     public void handleDestinationSelected(int targetPosition, View targetView) {
         if (pendingMovePosition == targetPosition) {
             cancelMoveMode();
@@ -745,14 +829,12 @@ public class MainActivity extends Activity {
         popup.setOnMenuItemClickListener(menuItem -> {
             int id = menuItem.getItemId();
             if (id == 1) {
-                // החלפת מיקומים ברשימה (Swap)
                 LauncherItem targetItem = launcherItems.get(targetPosition);
                 launcherItems.set(pendingMovePosition, targetItem);
                 launcherItems.set(targetPosition, pendingMoveItem);
                 saveLauncherState();
                 refreshViews();
             } else if (id == 2) {
-                // מיזוג לתוך תיקייה
                 performMergeToFolder(targetPosition);
             }
             cancelMoveMode();
