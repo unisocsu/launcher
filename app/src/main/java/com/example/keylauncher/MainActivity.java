@@ -183,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
             menu.add(0, 100, 0, "הצג אפליקציות מוסתרות 👁️");
         }
         menu.add(0, 101, 0, "הוסף וידג'ט 🧩");
-        menu.add(0, 102, 0, "חפש אפליקציה 🔍"); // 🔍 כפתור החיפוש
+        menu.add(0, 102, 0, "חפש אפליקציה 🔍");
         return true;
     }
 
@@ -193,13 +193,12 @@ public class MainActivity extends AppCompatActivity {
         if (id == 100) {
             showHiddenApps = !showHiddenApps;
             filterApps();
-            invalidateOptionsMenu(); // רענון הכיתוב בתפריט
+            invalidateOptionsMenu();
             return true;
         } else if (id == 101) {
             selectWidget();
             return true;
         } else if (id == 102) {
-            // 🔍 פתיחת דיאלוג החיפוש
             AppSearchDialog searchDialog = new AppSearchDialog(this, allItems);
             searchDialog.show();
             return true;
@@ -310,7 +309,9 @@ public class MainActivity extends AppCompatActivity {
         if (appWidgetHost != null) appWidgetHost.stopListening();
     }
 
-    // מחלקות עזר
+    // ----------------------------------------------------
+    // 📦 מחלקות עזר למבנה הנתונים
+    // ----------------------------------------------------
     public abstract static class LauncherItem {
         public String title;
         public String customTitle;
@@ -319,11 +320,28 @@ public class MainActivity extends AppCompatActivity {
 
     public static class AppItem extends LauncherItem {
         public String packageName;
+        public String customIconUri; // 🖼️ נתיב לאייקון מותאם אישית
+
         @Override
-        public boolean isFolder() { return false; }
+        public boolean isFolder() { 
+            return false; 
+        }
     }
 
-    public boolean isPickingDestination() { return false; }
+    public static class FolderItem extends LauncherItem {
+        public List<AppItem> items = new ArrayList<>();
+
+        @Override
+        public boolean isFolder() { 
+            return true; 
+        }
+    }
+
+    public boolean isPickingDestination() { 
+        return false; 
+    }
+
     public void handleDestinationSelected(int pos, View v) {}
-    public void openFolder(Object folder) {}
+
+    public void openFolder(FolderItem folder) {}
 }
