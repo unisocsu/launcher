@@ -1,6 +1,5 @@
 package com.example.keylauncher;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.appwidget.AppWidgetHost;
 import android.appwidget.AppWidgetHostView;
@@ -11,7 +10,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -55,7 +53,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 📶 א. הבטחה שה-Status Bar נשאר גלוי
+        // 📶 א. השארת ה-Status Bar גלוי
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         setContentView(R.layout.activity_main);
@@ -76,23 +74,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ----------------------------------------------------
-    // 🖱️ ב. שורת הקוד והפונקציה להפעלת העכבר מתוך הדה-קומפילציה
+    // 🖱️ ב. הפעלת/כיבוי העכבר מתוך הדה-קומפילציה
     // ----------------------------------------------------
     public void toggleMousePointer() {
-        // 🎯 שורת הקוד שמפעילה/מכבה את העכבר בשידור Broadcast למכשיר:
         Intent intent = new Intent("com.android.settings.POWER_POINTER_TOGGLE");
         sendBroadcast(intent);
-
-        // 💡 חלופה נוספת שנמצאת בחלק מגרסאות הדה-קומפילציה (לפי הגדרות system):
-        /*
-        try {
-            int current = Settings.System.getInt(getContentResolver(), "pointer_speed", 0);
-            Settings.System.putInt(getContentResolver(), "pointer_speed", current == 0 ? 1 : 0);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        */
-
         Toast.makeText(this, "מצב עכבר שונה 🖱️", Toast.LENGTH_SHORT).show();
     }
 
@@ -134,7 +120,7 @@ public class MainActivity extends AppCompatActivity {
         AppItem app = (AppItem) item;
         PopupMenu popup = new PopupMenu(this, view);
 
-        // ב. הפעלת עכבר 🖱️
+        // ג. הפעלת עכבר 🖱️
         popup.getMenu().add("הפעל/כבוי עכבר 🖱️").setOnMenuItemClickListener(m -> {
             toggleMousePointer();
             return true;
@@ -165,7 +151,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showEditTitleDialog(AppItem app) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("עריכת שם אפליקציה");
+        builder.setTitle("עריכת שם אפליקציה ✏️");
         final EditText input = new EditText(this);
         input.setText(app.customTitle != null ? app.customTitle : app.title);
         builder.setView(input);
@@ -187,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ----------------------------------------------------
-    // ⚙️ י. תפריט אפשרויות מובנה של אנדרואיד (Options Menu)
+    // ⚙️ י. תפריט אפשרויות מובנה (Options Menu) + חיפוש 🔍
     // ----------------------------------------------------
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -197,18 +183,25 @@ public class MainActivity extends AppCompatActivity {
             menu.add(0, 100, 0, "הצג אפליקציות מוסתרות 👁️");
         }
         menu.add(0, 101, 0, "הוסף וידג'ט 🧩");
+        menu.add(0, 102, 0, "חפש אפליקציה 🔍"); // 🔍 כפתור החיפוש
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == 100) {
+        int id = item.getItemId();
+        if (id == 100) {
             showHiddenApps = !showHiddenApps;
             filterApps();
-            invalidateOptionsMenu(); // רענון הטקסט בתפריט
+            invalidateOptionsMenu(); // רענון הכיתוב בתפריט
             return true;
-        } else if (item.getItemId() == 101) {
+        } else if (id == 101) {
             selectWidget();
+            return true;
+        } else if (id == 102) {
+            // 🔍 פתיחת דיאלוג החיפוש
+            AppSearchDialog searchDialog = new AppSearchDialog(this, allItems);
+            searchDialog.show();
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -232,7 +225,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadApps() {
-        // טעינת אפליקציות מהספק (דוגמה)
         filterApps();
         adapter = new LauncherAdapter(this, displayedItems);
         recyclerView.setAdapter(adapter);
@@ -294,7 +286,7 @@ public class MainActivity extends AppCompatActivity {
 
         widgetContainer.removeAllViews();
         widgetContainer.addView(hostView);
-        widgetContainer.setVisibility(View.VISIBLE); // 🟢 חשיפת ה-Container במידה שיש וידג'ט
+        widgetContainer.setVisibility(View.VISIBLE);
     }
 
     private void loadSavedWidget() {
@@ -302,7 +294,7 @@ public class MainActivity extends AppCompatActivity {
         if (savedId != -1) {
             renderWidget(savedId);
         } else {
-            widgetContainer.setVisibility(View.GONE); // 🔴 הסתרה מוחלטת כשאין וידג'ט!
+            widgetContainer.setVisibility(View.GONE);
         }
     }
 
@@ -318,7 +310,7 @@ public class MainActivity extends AppCompatActivity {
         if (appWidgetHost != null) appWidgetHost.stopListening();
     }
 
-    // מחלקות עזר בסיסיות למבנה הנתונים
+    // מחלקות עזר
     public abstract static class LauncherItem {
         public String title;
         public String customTitle;
@@ -330,4 +322,8 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public boolean isFolder() { return false; }
     }
+
+    public boolean isPickingDestination() { return false; }
+    public void handleDestinationSelected(int pos, View v) {}
+    public void openFolder(Object folder) {}
 }
