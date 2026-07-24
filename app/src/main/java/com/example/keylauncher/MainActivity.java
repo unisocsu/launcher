@@ -36,7 +36,7 @@ public class MainActivity extends AppCompatActivity {
     private AppWidgetHost appWidgetHost;
     private FrameLayout widgetContainer;
     private RecyclerView recyclerView;
-    private AppAdapter appAdapter;
+    private LauncherAdapter launcherAdapter;
     private List<LauncherItem> launcherItems;
 
     private static final int APPWIDGET_HOST_ID = 1024;
@@ -57,11 +57,15 @@ public class MainActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.recycler_view);
 
         // 7. תצוגת רשת 4 עמודות 📊
-        recyclerView.setLayoutManager(new GridLayoutManager(this, 4));
+        if (recyclerView != null) {
+            recyclerView.setLayoutManager(new GridLayoutManager(this, 4));
+        }
         
         loadMockItems();
-        appAdapter = new AppAdapter(this, launcherItems, this::showAppPopupMenu);
-        recyclerView.setAdapter(appAdapter);
+        launcherAdapter = new LauncherAdapter(this, launcherItems);
+        if (recyclerView != null) {
+            recyclerView.setAdapter(launcherAdapter);
+        }
 
         // 5. ניהול וידג'טים מתקדם 🧩
         appWidgetManager = AppWidgetManager.getInstance(this);
@@ -94,7 +98,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_CALL && !event.isCanceled()) {
-            toggleMousePointer(); // לחיצה קצרה: עכבר
+            toggleMousePointer();
             return true;
         }
         return super.onKeyUp(keyCode, event);
@@ -103,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onKeyLongPress(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_CALL) {
-            openDialer(); // לחיצה ארוכה: חייגן
+            openDialer();
             return true;
         }
         return super.onKeyLongPress(keyCode, event);
@@ -120,7 +124,25 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
-    // פתיחת תיקייה (נקרא על ידי ה-Adapter) 📂
+    // --- מתקפות ופונקציות שדורשים שאר הקבצים (LauncherAdapter & AppSearchDialog) ---
+
+    public boolean isPickingDestination() {
+        return false; // מצב בחירת יעד לתיקייה/העברה
+    }
+
+    public void handleDestinationSelected(int position, View v) {
+        // טיפול בבחירת יעד
+    }
+
+    public void showContextMenu(View view, int position) {
+        if (position >= 0 && position < launcherItems.size()) {
+            LauncherItem item = launcherItems.get(position);
+            if (!item.isFolder() && item instanceof AppItem) {
+                showAppPopupMenu(view, (AppItem) item);
+            }
+        }
+    }
+
     public void openFolder(FolderItem folder) {
         Toast.makeText(this, "📂 פתיחת תיקייה: " + folder.folderName, Toast.LENGTH_SHORT).show();
     }
@@ -146,7 +168,6 @@ public class MainActivity extends AppCompatActivity {
                 selectWidget();
                 return true;
             case 3:
-                // אפשר לפתוח כאן את ה-AppSearchDialog
                 Toast.makeText(this, "🔍 פתיחת חיפוש מהיר", Toast.LENGTH_SHORT).show();
                 return true;
         }
@@ -250,8 +271,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadMockItems() {
         launcherItems = new ArrayList<>();
-        launcherItems.add(new AppItem("com.android.settings", "הגדרות", null, false));
-        launcherItems.add(new AppItem("com.android.dialer", "חייגן", null, false));
+        launcherItems.add(new AppItem("com.android.settings", "הגדרות", "הגדרות מערכת", false));
+        launcherItems.add(new AppItem("com.android.dialer", "חייגן", "חייגן טלפון", false));
     }
 
     private void filterApps() {
@@ -266,40 +287,44 @@ public class MainActivity extends AppCompatActivity {
                 filtered.add(itemz);
             }
         }
-        if (appAdapter != null) {
-            appAdapter.updateList(filtered);
+        if (launcherAdapter != null) {
+            launcherAdapter.updateList(filtered);
         }
     }
 
     private void showRenameDialog(AppItem app) {
         EditText input = new EditText(this);
-        input.setText(app.customName);
+        input.setText(app.customTitle != null ? app.customTitle : app.title);
         new AlertDialog.Builder(this)
             .setTitle("✏️ ערוך שם")
             .setView(input)
             .setPositiveButton("שמור", (d, w) -> {
-                app.customName = input.getText().toString();
-                appAdapter.notifyDataSetChanged();
+                app.customTitle = input.getText().toString();
+                launcherAdapter.notifyDataSetChanged();
             })
             .setNegativeButton("ביטול", null)
             .show();
     }
 
-    // --- מחלקות מודל נדרשות לתאימות עם שאר הקבצים (LauncherItem, AppItem, FolderItem) ---
+    // --- מחלקות בסיס ומודלים מותאמים לכל הפרויקט ---
     public static class LauncherItem {
-        // מחלקת בסיס משותפת
+        public String title;
+        public String customTitle;
+
+        public boolean isFolder() {
+            return this instanceof FolderItem;
+        }
     }
 
     public static class AppItem extends LauncherItem {
         public String packageName;
-        public String customName;
         public String customIconUri;
         public boolean isHidden;
 
-        public AppItem(String packageName, String customName, String customIconUri, boolean isHidden) {
+        public AppItem(String packageName, String title, String customTitle, boolean isHidden) {
             this.packageName = packageName;
-            this.customName = customName;
-            this.customIconUri = customIconUri;
+            this.title = title;
+            this.customTitle = customTitle;
             this.isHidden = isHidden;
         }
     }
@@ -312,6 +337,7 @@ public class MainActivity extends AppCompatActivity {
 
         public FolderItem(String folderName, List<AppItem> appsInside, String customIconPath, boolean useFirstAppIcon) {
             this.folderName = folderName;
+            this.title = folderName;
             this.appsInside = appsInside;
             this.customIconPath = customIconPath;
             this.useFirstAppIcon = useFirstAppIcon;
