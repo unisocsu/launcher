@@ -1,60 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:background="@android:color/transparent">
+    android:orientation="vertical"
+    android:fitsSystemWindows="true"> <!-- מונע חפיפה עם ה-Status Bar ושומר עליו גלוי 📶 -->
 
-    <LinearLayout
+    <!-- container הוידג'ט - כשאין וידג'ט הוא מוסתר לחלוטין (GONE) -->
+    <FrameLayout
+        android:id="@+id/widget_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp">
+        android:visibility="gone"
+        android:padding="8dp" />
 
-        <TextView
-            android:id="@+id/date_time_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:paddingTop="4dp"
-            android:paddingBottom="8dp"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:shadowColor="#000000"
-            android:shadowDx="2"
-            android:shadowDy="2"
-            android:shadowRadius="4" />
+    <!-- רשימת / רשת האפליקציות -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/apps_recycler_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="vertical" />
 
-        <LinearLayout
-            android:id="@+id/widget_container"
-            android:layout_width="match_parent"
-            android:layout_height="200dp"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:paddingBottom="8dp"
-            android:focusable="true"
-            android:clickable="true"
-            android:background="?android:attr/selectableItemBackground">
-
-            <TextView
-                android:id="@+id/widget_placeholder_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="לחץ לחיצה ארוכה להוספת ווידג'ט"
-                android:textColor="#88FFFFFF"
-                android:textSize="14sp"
-                android:visibility="visible" />
-
-        </LinearLayout>
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/launcher_recycler_view"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:clipToPadding="false"
-            android:focusable="true"
-            android:clickable="true" />
-
-    </LinearLayout>
-</ScrollView>
+</LinearLayout>
