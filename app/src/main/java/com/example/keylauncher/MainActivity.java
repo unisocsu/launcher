@@ -310,7 +310,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ----------------------------------------------------
-    // 📦 מחלקות עזר למבנה הנתונים
+    // 📦 מחלקות עזר למבנה הנתונים (מתוקן ומותאם ל-Adapter!)
     // ----------------------------------------------------
     public abstract static class LauncherItem {
         public String title;
@@ -320,7 +320,7 @@ public class MainActivity extends AppCompatActivity {
 
     public static class AppItem extends LauncherItem {
         public String packageName;
-        public String customIconUri; // 🖼️ נתיב לאייקון מותאם אישית
+        public String customIconUri; // 🖼️ נתיב לאייקון מותאם אישית של אפליקציה
 
         @Override
         public boolean isFolder() { 
@@ -329,7 +329,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public static class FolderItem extends LauncherItem {
-        public List<AppItem> items = new ArrayList<>();
+        public List<AppItem> appsInside = new ArrayList<>(); // 👈 הותאם ל-LauncherAdapter
+        public String customIconPath;                       // 👈 הותאם ל-LauncherAdapter
+        public boolean useFirstAppIcon = false;            // 👈 הותאם ל-LauncherAdapter
 
         @Override
         public boolean isFolder() { 
