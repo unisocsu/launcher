@@ -1,4 +1,4 @@
-package com.example.myclauncher;
+package com.example.keylauncher;
 
 import android.app.AlertDialog;
 import android.appwidget.AppWidgetHost;
@@ -37,7 +37,7 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout widgetContainer;
     private RecyclerView recyclerView;
     private AppAdapter appAdapter;
-    private List<AppItem> appList;
+    private List<LauncherItem> launcherItems;
 
     private static final int APPWIDGET_HOST_ID = 1024;
     private static final int REQUEST_PICK_APPWIDGET = 1;
@@ -59,8 +59,8 @@ public class MainActivity extends AppCompatActivity {
         // 7. תצוגת רשת 4 עמודות 📊
         recyclerView.setLayoutManager(new GridLayoutManager(this, 4));
         
-        loadMockApps();
-        appAdapter = new AppAdapter(this, appList, this::showAppPopupMenu);
+        loadMockItems();
+        appAdapter = new AppAdapter(this, launcherItems, this::showAppPopupMenu);
         recyclerView.setAdapter(appAdapter);
 
         // 5. ניהול וידג'טים מתקדם 🧩
@@ -120,6 +120,11 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
+    // פתיחת תיקייה (נקרא על ידי ה-Adapter) 📂
+    public void openFolder(FolderItem folder) {
+        Toast.makeText(this, "📂 פתיחת תיקייה: " + folder.folderName, Toast.LENGTH_SHORT).show();
+    }
+
     // 4. תפריט אפשרויות מובנה (Options Menu) ⚙️
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -141,6 +146,7 @@ public class MainActivity extends AppCompatActivity {
                 selectWidget();
                 return true;
             case 3:
+                // אפשר לפתוח כאן את ה-AppSearchDialog
                 Toast.makeText(this, "🔍 פתיחת חיפוש מהיר", Toast.LENGTH_SHORT).show();
                 return true;
         }
@@ -242,18 +248,27 @@ public class MainActivity extends AppCompatActivity {
         widgetContainer.setVisibility(View.GONE);
     }
 
-    private void loadMockApps() {
-        appList = new ArrayList<>();
-        appList.add(new AppItem("com.android.settings", "הגדרות", false));
-        appList.add(new AppItem("com.android.dialer", "חייגן", false));
+    private void loadMockItems() {
+        launcherItems = new ArrayList<>();
+        launcherItems.add(new AppItem("com.android.settings", "הגדרות", null, false));
+        launcherItems.add(new AppItem("com.android.dialer", "חייגן", null, false));
     }
 
     private void filterApps() {
-        List<AppItem> filtered = new ArrayList<>();
-        for (AppItem app : appList) {
-            if (isShowingHiddenApps || !app.isHidden) filtered.add(app);
+        List<LauncherItem> filtered = new ArrayList<>();
+        for (LauncherItem itemz : launcherItems) {
+            if (itemz instanceof AppItem) {
+                AppItem app = (AppItem) itemz;
+                if (isShowingHiddenApps || !app.isHidden) {
+                    filtered.add(app);
+                }
+            } else {
+                filtered.add(itemz);
+            }
         }
-        appAdapter.updateList(filtered);
+        if (appAdapter != null) {
+            appAdapter.updateList(filtered);
+        }
     }
 
     private void showRenameDialog(AppItem app) {
@@ -270,56 +285,36 @@ public class MainActivity extends AppCompatActivity {
             .show();
     }
 
-    // מודל ו-Adapter פנימיים לצמצום קבצים
-    public static class AppItem {
-        public String packageName, customName;
+    // --- מחלקות מודל נדרשות לתאימות עם שאר הקבצים (LauncherItem, AppItem, FolderItem) ---
+    public static class LauncherItem {
+        // מחלקת בסיס משותפת
+    }
+
+    public static class AppItem extends LauncherItem {
+        public String packageName;
+        public String customName;
+        public String customIconUri;
         public boolean isHidden;
-        public AppItem(String pkg, String name, boolean hidden) {
-            this.packageName = pkg;
-            this.customName = name;
-            this.isHidden = hidden;
+
+        public AppItem(String packageName, String customName, String customIconUri, boolean isHidden) {
+            this.packageName = packageName;
+            this.customName = customName;
+            this.customIconUri = customIconUri;
+            this.isHidden = isHidden;
         }
     }
 
-    public static class AppAdapter extends RecyclerView.Adapter<AppAdapter.VH> {
-        private final Context ctx;
-        private List<AppItem> list;
-        private final OnLongClick l;
+    public static class FolderItem extends LauncherItem {
+        public String folderName;
+        public List<AppItem> appsInside;
+        public String customIconPath;
+        public boolean useFirstAppIcon;
 
-        public interface OnLongClick { void handle(View v, AppItem item); }
-
-        public AppAdapter(Context ctx, List<AppItem> list, OnLongClick l) {
-            this.ctx = ctx; this.list = list; this.l = l;
-        }
-
-        public void updateList(List<AppItem> newList) {
-            this.list = newList;
-            notifyDataSetChanged();
-        }
-
-        @NonNull @Override
-        public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            TextView tv = new TextView(ctx);
-            tv.setPadding(40, 40, 40, 40);
-            tv.setTextSize(16);
-            return new VH(tv);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull VH holder, int position) {
-            AppItem item = list.get(position);
-            holder.tv.setText(item.customName);
-            holder.itemView.setOnLongClickListener(v -> { l.handle(v, item); return true; });
-        }
-
-        @Override public int getItemCount() { return list.size(); }
-
-        public static class VH extends RecyclerView.ViewHolder {
-            TextView tv;
-            public VH(@NonNull View itemView) {
-                super(itemView);
-                tv = (TextView) itemView;
-            }
+        public FolderItem(String folderName, List<AppItem> appsInside, String customIconPath, boolean useFirstAppIcon) {
+            this.folderName = folderName;
+            this.appsInside = appsInside;
+            this.customIconPath = customIconPath;
+            this.useFirstAppIcon = useFirstAppIcon;
         }
     }
 }
