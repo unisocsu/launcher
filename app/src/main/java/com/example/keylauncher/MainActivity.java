@@ -8,6 +8,8 @@ import android.appwidget.AppWidgetProviderInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.KeyEvent;
@@ -63,33 +65,66 @@ public class MainActivity extends AppCompatActivity {
 
         widgetContainer = findViewById(R.id.widget_container);
         recyclerView = findViewById(R.id.apps_recycler_view);
-        recyclerView.setLayoutManager(new GridLayoutManager(this, 4));
+
+        // 🛡️ הגנת Null במידה וה-XML שונה
+        if (recyclerView != null) {
+            recyclerView.setLayoutManager(new GridLayoutManager(this, 4));
+        }
 
         // 🧩 ז. אתחול מנגנון הוידג'טים
         appWidgetManager = AppWidgetManager.getInstance(this);
         appWidgetHost = new AppWidgetHost(this, APPWIDGET_HOST_ID);
 
         loadSavedWidget();
+        loadInstalledApps(); // 📲 טעינת האפליקציות מאינטנט המערכת
         loadApps();
+    }
+
+    // ----------------------------------------------------
+    // 📲 טעינת כל האפליקציות המותקנות במכשיר
+    // ----------------------------------------------------
+    private void loadInstalledApps() {
+        allItems.clear();
+        PackageManager pm = getPackageManager();
+        Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+        mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+
+        List<ResolveInfo> ril = pm.queryIntentActivities(mainIntent, 0);
+        for (ResolveInfo ri : ril) {
+            AppItem app = new AppItem();
+            app.title = ri.loadLabel(pm).toString();
+            app.packageName = ri.activityInfo.packageName;
+
+            // בדיקת שם מותאם אישית שמור
+            String customName = prefs.getString("custom_name_" + app.packageName, null);
+            if (customName != null) {
+                app.customTitle = customName;
+            }
+
+            allItems.add(app);
+        }
     }
 
     // ----------------------------------------------------
     // 🖱️ ב. הפעלת/כיבוי העכבר מתוך הדה-קומפילציה
     // ----------------------------------------------------
     public void toggleMousePointer() {
-        Intent intent = new Intent("com.android.settings.POWER_POINTER_TOGGLE");
-        sendBroadcast(intent);
-        Toast.makeText(this, "מצב עכבר שונה 🖱️", Toast.LENGTH_SHORT).show();
+        try {
+            Intent intent = new Intent("com.android.settings.POWER_POINTER_TOGGLE");
+            sendBroadcast(intent);
+            Toast.makeText(this, "מצב עכבר שונה 🖱️", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     // ----------------------------------------------------
-    // 📞 ב + ט. זיהוי מקש חיוג (לחיצה קצרה לעכבר, ארוכה לחייגן)
+    // 📞 ב + ט. זיהוי מקש חיוג
     // ----------------------------------------------------
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             if (event.isLongPress()) {
-                // 📞 לחיצה ארוכה: פתיחת החייגן
                 Intent dialIntent = new Intent(Intent.ACTION_DIAL);
                 startActivity(dialIntent);
                 return true;
@@ -102,7 +137,6 @@ public class MainActivity extends AppCompatActivity {
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             if ((event.getFlags() & KeyEvent.FLAG_CANCELED_LONG_PRESS) == 0) {
-                // 🖱️ לחיצה קצרה: הפעלה/כיבוי של העכבר
                 toggleMousePointer();
                 return true;
             }
@@ -111,34 +145,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ----------------------------------------------------
-    // 📱 ג-ו. תפריט לחיצה ארוכה על אפליקציה (PopupMenu)
+    // 📱 ג-ו. תפריט לחיצה ארוכה
     // ----------------------------------------------------
     public void showContextMenu(View view, int position) {
+        if (position < 0 || position >= displayedItems.size()) return;
         LauncherItem item = displayedItems.get(position);
         if (item.isFolder()) return;
 
         AppItem app = (AppItem) item;
         PopupMenu popup = new PopupMenu(this, view);
 
-        // ג. הפעלת עכבר 🖱️
         popup.getMenu().add("הפעל/כבוי עכבר 🖱️").setOnMenuItemClickListener(m -> {
             toggleMousePointer();
             return true;
         });
 
-        // ו. עריכת שם ✏️
         popup.getMenu().add("ערוך שם ✏️").setOnMenuItemClickListener(m -> {
             showEditTitleDialog(app);
             return true;
         });
 
-        // ה. הסתרת אפליקציה 👁️‍🗨️
         popup.getMenu().add("הסתר אפליקציה 👁️‍🗨️").setOnMenuItemClickListener(m -> {
             hideApp(app.packageName);
             return true;
         });
 
-        // ד. הסרת התקנה 🗑️
         popup.getMenu().add("הסר התקנה 🗑️").setOnMenuItemClickListener(m -> {
             Intent uninstallIntent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE);
             uninstallIntent.setData(Uri.parse("package:" + app.packageName));
@@ -159,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
         builder.setPositiveButton("שמור", (dialog, which) -> {
             app.customTitle = input.getText().toString();
             prefs.edit().putString("custom_name_" + app.packageName, app.customTitle).apply();
-            adapter.notifyDataSetChanged();
+            if (adapter != null) adapter.notifyDataSetChanged();
         });
         builder.setNegativeButton("ביטול", null);
         builder.show();
@@ -173,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ----------------------------------------------------
-    // ⚙️ י. תפריט אפשרויות מובנה (Options Menu) + חיפוש 🔍
+    // ⚙️ י. תפריט אפשרויות מובנה + חיפוש 🔍
     // ----------------------------------------------------
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -225,24 +256,31 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadApps() {
         filterApps();
-        adapter = new LauncherAdapter(this, displayedItems);
-        recyclerView.setAdapter(adapter);
+        if (recyclerView != null) {
+            adapter = new LauncherAdapter(this, displayedItems);
+            recyclerView.setAdapter(adapter);
+        }
     }
 
     // ----------------------------------------------------
-    // 🧩 ז. מנגנון הוספה ורינדור של וידג'טים
+    // 🧩 ז. מנגנון וידג'טים
     // ----------------------------------------------------
     private void selectWidget() {
-        int appWidgetId = appWidgetHost.allocateAppWidgetId();
-        Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
-        pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
-        startActivityForResult(pickIntent, REQUEST_PICK_APPWIDGET);
+        try {
+            int appWidgetId = appWidgetHost.allocateAppWidgetId();
+            Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
+            pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+            startActivityForResult(pickIntent, REQUEST_PICK_APPWIDGET);
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "לא ניתן לפתוח את בחר הוידג'טים", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == RESULT_OK) {
+        if (resultCode == RESULT_OK && data != null) {
             if (requestCode == REQUEST_PICK_APPWIDGET) {
                 configureWidget(data);
             } else if (requestCode == REQUEST_CREATE_APPWIDGET) {
@@ -260,7 +298,7 @@ public class MainActivity extends AppCompatActivity {
         int appWidgetId = data.getExtras().getInt(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
         AppWidgetProviderInfo appWidgetInfo = appWidgetManager.getAppWidgetInfo(appWidgetId);
 
-        if (appWidgetInfo.configure != null) {
+        if (appWidgetInfo != null && appWidgetInfo.configure != null) {
             Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE);
             intent.setComponent(appWidgetInfo.configure);
             intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
@@ -271,28 +309,33 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void createWidget(Intent data) {
+        if (data == null || data.getExtras() == null) return;
         int appWidgetId = data.getExtras().getInt(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
         prefs.edit().putInt("saved_widget_id", appWidgetId).apply();
         renderWidget(appWidgetId);
     }
 
     private void renderWidget(int appWidgetId) {
-        AppWidgetProviderInfo appWidgetInfo = appWidgetManager.getAppWidgetInfo(appWidgetId);
-        if (appWidgetInfo == null) return;
+        try {
+            AppWidgetProviderInfo appWidgetInfo = appWidgetManager.getAppWidgetInfo(appWidgetId);
+            if (appWidgetInfo == null || widgetContainer == null) return;
 
-        AppWidgetHostView hostView = appWidgetHost.createView(getApplicationContext(), appWidgetId, appWidgetInfo);
-        hostView.setAppWidget(appWidgetId, appWidgetInfo);
+            AppWidgetHostView hostView = appWidgetHost.createView(getApplicationContext(), appWidgetId, appWidgetInfo);
+            hostView.setAppWidget(appWidgetId, appWidgetInfo);
 
-        widgetContainer.removeAllViews();
-        widgetContainer.addView(hostView);
-        widgetContainer.setVisibility(View.VISIBLE);
+            widgetContainer.removeAllViews();
+            widgetContainer.addView(hostView);
+            widgetContainer.setVisibility(View.VISIBLE);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void loadSavedWidget() {
         int savedId = prefs.getInt("saved_widget_id", -1);
         if (savedId != -1) {
             renderWidget(savedId);
-        } else {
+        } else if (widgetContainer != null) {
             widgetContainer.setVisibility(View.GONE);
         }
     }
@@ -300,17 +343,29 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        if (appWidgetHost != null) appWidgetHost.startListening();
+        if (appWidgetHost != null) {
+            try {
+                appWidgetHost.startListening();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        if (appWidgetHost != null) appWidgetHost.stopListening();
+        if (appWidgetHost != null) {
+            try {
+                appWidgetHost.stopListening();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     // ----------------------------------------------------
-    // 📦 מחלקות עזר למבנה הנתונים (מתוקן ומותאם ל-Adapter!)
+    // 📦 מחלקות עזר למבנה הנתונים
     // ----------------------------------------------------
     public abstract static class LauncherItem {
         public String title;
@@ -320,7 +375,7 @@ public class MainActivity extends AppCompatActivity {
 
     public static class AppItem extends LauncherItem {
         public String packageName;
-        public String customIconUri; // 🖼️ נתיב לאייקון מותאם אישית של אפליקציה
+        public String customIconUri;
 
         @Override
         public boolean isFolder() { 
@@ -329,9 +384,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public static class FolderItem extends LauncherItem {
-        public List<AppItem> appsInside = new ArrayList<>(); // 👈 הותאם ל-LauncherAdapter
-        public String customIconPath;                       // 👈 הותאם ל-LauncherAdapter
-        public boolean useFirstAppIcon = false;            // 👈 הותאם ל-LauncherAdapter
+        public List<AppItem> appsInside = new ArrayList<>();
+        public String customIconPath;
+        public boolean useFirstAppIcon = false;
 
         @Override
         public boolean isFolder() { 
