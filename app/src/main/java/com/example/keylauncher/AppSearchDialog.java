@@ -1,30 +1,30 @@
 package com.example.keylauncher;
 
-import android.app.Dialog;
-import android.content.Context;
-import android.content.Intent;
+import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Window;
 import android.widget.EditText;
+
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatDialog;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import java.util.ArrayList;
 import java.util.List;
 
-public class AppSearchDialog extends Dialog {
+public class AppSearchDialog extends AppCompatDialog {
 
     private final List<MainActivity.LauncherItem> allApps;
     private final List<MainActivity.LauncherItem> filteredList;
     private LauncherAdapter searchAdapter;
+    private final MainActivity activityContext;
 
     public AppSearchDialog(@NonNull MainActivity activity, List<MainActivity.LauncherItem> launcherItems) {
         super(activity);
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        setContentView(R.layout.dialog_app_search); // דיאלוג חיפוש פשוט
+        this.activityContext = activity;
 
-        // סינון פריטים שאינם תיקיות (רק אפליקציות)
         allApps = new ArrayList<>();
         for (MainActivity.LauncherItem item : launcherItems) {
             if (!item.isFolder()) {
@@ -32,27 +32,37 @@ public class AppSearchDialog extends Dialog {
             }
         }
         filteredList = new ArrayList<>(allApps);
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.dialog_app_search);
 
         RecyclerView recyclerView = findViewById(R.id.search_recycler_view);
         EditText searchEditText = findViewById(R.id.search_input);
 
-        recyclerView.setLayoutManager(new GridLayoutManager(activity, 3));
-        searchAdapter = new LauncherAdapter(activity, filteredList);
-        recyclerView.setAdapter(searchAdapter);
+        if (recyclerView != null) {
+            recyclerView.setLayoutManager(new GridLayoutManager(activityContext, 3));
+            searchAdapter = new LauncherAdapter(activityContext, filteredList);
+            recyclerView.setAdapter(searchAdapter);
+        }
 
-        // ⌨️ סינון בלייב לפי הוקלד
-        searchEditText.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+        if (searchEditText != null) {
+            searchEditText.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
 
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                filterApps(s.toString());
-            }
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    filterApps(s.toString());
+                }
 
-            @Override
-            public void afterTextChanged(Editable s) {}
-        });
+                @Override
+                public void afterTextChanged(Editable s) {}
+            });
+        }
     }
 
     private void filterApps(String query) {
@@ -63,11 +73,13 @@ public class AppSearchDialog extends Dialog {
             String lowerQuery = query.toLowerCase().trim();
             for (MainActivity.LauncherItem item : allApps) {
                 String title = (item.customTitle != null) ? item.customTitle : item.title;
-                if (title.toLowerCase().contains(lowerQuery)) {
+                if (title != null && title.toLowerCase().contains(lowerQuery)) {
                     filteredList.add(item);
                 }
             }
         }
-        searchAdapter.notifyDataSetChanged();
+        if (searchAdapter != null) {
+            searchAdapter.notifyDataSetChanged();
+        }
     }
 }
