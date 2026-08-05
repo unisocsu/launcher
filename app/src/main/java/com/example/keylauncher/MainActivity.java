@@ -5,29 +5,28 @@ import android.appwidget.AppWidgetHost;
 import android.appwidget.AppWidgetHostView;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProviderInfo;
-import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.PopupMenu;
-import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -50,24 +49,25 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // 1. תצוגת מערכת - סרגל מצב גלוי 📶
+        // תצוגת מערכת - סרגל מצב גלוי
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         widgetContainer = findViewById(R.id.widget_container);
         recyclerView = findViewById(R.id.recycler_view);
 
-        // 7. תצוגת רשת 4 עמודות 📊
         if (recyclerView != null) {
             recyclerView.setLayoutManager(new GridLayoutManager(this, 4));
         }
-        
-        loadMockItems();
+
+        // טעינת האפליקציות המותקנות במכשיר
+        loadInstalledApps();
+
         launcherAdapter = new LauncherAdapter(this, launcherItems);
         if (recyclerView != null) {
             recyclerView.setAdapter(launcherAdapter);
         }
 
-        // 5. ניהול וידג'טים מתקדם 🧩
+        // ניהול וידג'טים
         appWidgetManager = AppWidgetManager.getInstance(this);
         appWidgetHost = new AppWidgetHost(this, APPWIDGET_HOST_ID);
         loadSavedWidget();
@@ -85,9 +85,33 @@ public class MainActivity extends AppCompatActivity {
         appWidgetHost.stopListening();
     }
 
-    // 2. ניהול מקש חיוג (KEYCODE_CALL) 📞🖱️
+    // טעינת כל האפליקציות המותקנות
+    private void loadInstalledApps() {
+        launcherItems = new ArrayList<>();
+        PackageManager pm = getPackageManager();
+
+        Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
+        mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+
+        List<ResolveInfo> appList = pm.queryIntentActivities(mainIntent, 0);
+        Set<String> hiddenPackages = HiddenAppsManager.getHiddenPackages(this);
+
+        for (ResolveInfo ri : appList) {
+            String pkgName = ri.activityInfo.packageName;
+            String label = ri.loadLabel(pm).toString();
+            boolean isHidden = hiddenPackages.contains(pkgName);
+
+            launcherItems.add(new AppItem(pkgName, label, null, isHidden));
+        }
+    }
+
+    // ניהול מקשים וניתוב לווידג'ט
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
+            return true;
+        }
+
         if (keyCode == KeyEvent.KEYCODE_CALL) {
             event.startTracking();
             return true;
@@ -124,14 +148,11 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
-    // --- מתקפות ופונקציות שדורשים שאר הקבצים (LauncherAdapter & AppSearchDialog) ---
-
     public boolean isPickingDestination() {
-        return false; // מצב בחירת יעד לתיקייה/העברה
+        return false;
     }
 
     public void handleDestinationSelected(int position, View v) {
-        // טיפול בבחירת יעד
     }
 
     public void showContextMenu(View view, int position) {
@@ -147,7 +168,6 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, "📂 פתיחת תיקייה: " + folder.folderName, Toast.LENGTH_SHORT).show();
     }
 
-    // 4. תפריט אפשרויות מובנה (Options Menu) ⚙️
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         menu.add(0, 1, 0, isShowingHiddenApps ? "🙈 הסתר אפליקציות מוסתרות" : "👁️ הצג אפליקציות מוסתרות");
@@ -168,13 +188,14 @@ public class MainActivity extends AppCompatActivity {
                 selectWidget();
                 return true;
             case 3:
-                Toast.makeText(this, "🔍 פתיחת חיפוש מהיר", Toast.LENGTH_SHORT).show();
+                // חיבור דיאלוג החיפוש הפעיל
+                AppSearchDialog searchDialog = new AppSearchDialog(this, launcherItems);
+                searchDialog.show();
                 return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    // 3. תפריט בלחיצה ארוכה על אפליקציה (PopupMenu) 📱
     private void showAppPopupMenu(View anchor, AppItem app) {
         PopupMenu popup = new PopupMenu(this, anchor);
         popup.getMenu().add(0, 1, 0, "🖱️ הפעל/כבוי עכבר");
@@ -182,8 +203,8 @@ public class MainActivity extends AppCompatActivity {
         popup.getMenu().add(0, 3, 2, app.isHidden ? "👁️‍🗨️ הצג אפליקציה" : "👁️‍🗨️ הסתר אפליקציה");
         popup.getMenu().add(0, 4, 3, "🗑️ הסר התקנה");
 
-        popup.setOnMenuItemClickListener(item -> {
-            switch (item.getItemId()) {
+        popup.setOnMenuItemClickListener(menuItem -> {
+            switch (menuItem.getItemId()) {
                 case 1:
                     toggleMousePointer();
                     return true;
@@ -192,6 +213,7 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 case 3:
                     app.isHidden = !app.isHidden;
+                    HiddenAppsManager.setAppHidden(this, app.packageName, app.isHidden);
                     filterApps();
                     return true;
                 case 4:
@@ -205,7 +227,6 @@ public class MainActivity extends AppCompatActivity {
         popup.show();
     }
 
-    // ניהול וידג'טים (AppWidgetHost) 🧩
     private void selectWidget() {
         int appWidgetId = appWidgetHost.allocateAppWidgetId();
         Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
@@ -269,12 +290,6 @@ public class MainActivity extends AppCompatActivity {
         widgetContainer.setVisibility(View.GONE);
     }
 
-    private void loadMockItems() {
-        launcherItems = new ArrayList<>();
-        launcherItems.add(new AppItem("com.android.settings", "הגדרות", "הגדרות מערכת", false));
-        launcherItems.add(new AppItem("com.android.dialer", "חייגן", "חייגן טלפון", false));
-    }
-
     private void filterApps() {
         List<LauncherItem> filtered = new ArrayList<>();
         for (LauncherItem itemz : launcherItems) {
@@ -306,7 +321,7 @@ public class MainActivity extends AppCompatActivity {
             .show();
     }
 
-    // --- מחלקות בסיס ומודלים מותאמים לכל הפרויקט ---
+    // מחלקות בסיס ומודלים
     public static class LauncherItem {
         public String title;
         public String customTitle;
