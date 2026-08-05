@@ -49,11 +49,13 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // תצוגת מערכת - סרגל מצב גלוי
+        // תצוגת מערכת - סרגל מצב גלוי 📶
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         widgetContainer = findViewById(R.id.widget_container);
-        recyclerView = findViewById(R.id.recycler_view);
+        
+        // תיקון ה-ID לתואם ל-XML שלך
+        recyclerView = findViewById(R.id.apps_recycler_view);
 
         if (recyclerView != null) {
             recyclerView.setLayoutManager(new GridLayoutManager(this, 4));
@@ -76,16 +78,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        appWidgetHost.startListening();
+        if (appWidgetHost != null) {
+            appWidgetHost.startListening();
+        }
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        appWidgetHost.stopListening();
+        if (appWidgetHost != null) {
+            appWidgetHost.stopListening();
+        }
     }
 
-    // טעינת כל האפליקציות המותקנות
+    // שליפת האפליקציות המותקנות במערכת
     private void loadInstalledApps() {
         launcherItems = new ArrayList<>();
         PackageManager pm = getPackageManager();
@@ -101,11 +107,14 @@ public class MainActivity extends AppCompatActivity {
             String label = ri.loadLabel(pm).toString();
             boolean isHidden = hiddenPackages.contains(pkgName);
 
-            launcherItems.add(new AppItem(pkgName, label, null, isHidden));
+            // דילוג על אפליקציות מוסתרות במידה ואיננו במצב הצגת מוסתרים
+            if (!isHidden || isShowingHiddenApps) {
+                launcherItems.add(new AppItem(pkgName, label, null, isHidden));
+            }
         }
     }
 
-    // ניהול מקשים וניתוב לווידג'ט
+    // ניהול מקשים, D-Pad וניתוב לווידג'ט
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (WidgetKeyController.handleWidgetKey(this, keyCode)) {
@@ -168,6 +177,7 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, "📂 פתיחת תיקייה: " + folder.folderName, Toast.LENGTH_SHORT).show();
     }
 
+    // תפריט אפשרויות (Options Menu)
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         menu.add(0, 1, 0, isShowingHiddenApps ? "🙈 הסתר אפליקציות מוסתרות" : "👁️ הצג אפליקציות מוסתרות");
@@ -182,13 +192,15 @@ public class MainActivity extends AppCompatActivity {
             case 1:
                 isShowingHiddenApps = !isShowingHiddenApps;
                 invalidateOptionsMenu();
-                filterApps();
+                loadInstalledApps();
+                if (launcherAdapter != null) {
+                    launcherAdapter.updateList(launcherItems);
+                }
                 return true;
             case 2:
                 selectWidget();
                 return true;
             case 3:
-                // חיבור דיאלוג החיפוש הפעיל
                 AppSearchDialog searchDialog = new AppSearchDialog(this, launcherItems);
                 searchDialog.show();
                 return true;
@@ -196,6 +208,7 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    // תפריט בלחיצה ארוכה על אפליקציה
     private void showAppPopupMenu(View anchor, AppItem app) {
         PopupMenu popup = new PopupMenu(this, anchor);
         popup.getMenu().add(0, 1, 0, "🖱️ הפעל/כבוי עכבר");
@@ -214,7 +227,10 @@ public class MainActivity extends AppCompatActivity {
                 case 3:
                     app.isHidden = !app.isHidden;
                     HiddenAppsManager.setAppHidden(this, app.packageName, app.isHidden);
-                    filterApps();
+                    loadInstalledApps();
+                    if (launcherAdapter != null) {
+                        launcherAdapter.updateList(launcherItems);
+                    }
                     return true;
                 case 4:
                     Intent intent = new Intent(Intent.ACTION_DELETE);
@@ -227,6 +243,7 @@ public class MainActivity extends AppCompatActivity {
         popup.show();
     }
 
+    // ניהול וידג'טים (AppWidgetHost)
     private void selectWidget() {
         int appWidgetId = appWidgetHost.allocateAppWidgetId();
         Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
@@ -290,23 +307,6 @@ public class MainActivity extends AppCompatActivity {
         widgetContainer.setVisibility(View.GONE);
     }
 
-    private void filterApps() {
-        List<LauncherItem> filtered = new ArrayList<>();
-        for (LauncherItem itemz : launcherItems) {
-            if (itemz instanceof AppItem) {
-                AppItem app = (AppItem) itemz;
-                if (isShowingHiddenApps || !app.isHidden) {
-                    filtered.add(app);
-                }
-            } else {
-                filtered.add(itemz);
-            }
-        }
-        if (launcherAdapter != null) {
-            launcherAdapter.updateList(filtered);
-        }
-    }
-
     private void showRenameDialog(AppItem app) {
         EditText input = new EditText(this);
         input.setText(app.customTitle != null ? app.customTitle : app.title);
@@ -315,13 +315,15 @@ public class MainActivity extends AppCompatActivity {
             .setView(input)
             .setPositiveButton("שמור", (d, w) -> {
                 app.customTitle = input.getText().toString();
-                launcherAdapter.notifyDataSetChanged();
+                if (launcherAdapter != null) {
+                    launcherAdapter.notifyDataSetChanged();
+                }
             })
             .setNegativeButton("ביטול", null)
             .show();
     }
 
-    // מחלקות בסיס ומודלים
+    // מודלים ומחלקות בסיס
     public static class LauncherItem {
         public String title;
         public String customTitle;
