@@ -4,21 +4,21 @@ plugins {
 
 android {
     namespace 'com.example.keylauncher'
-    
-    // נשאר על 33 בשביל ה-Compiler, אבל ה-Min יורד
     compileSdk 33
 
     defaultConfig {
         applicationId "com.example.keylauncher"
-        
-        // שינוי קריטי: תמיכה באנדרואיד 4.4 (API 19)
         minSdk 19
         targetSdk 33
         versionCode 1
         versionName "1.0"
         
-        // חובה באנדרואיד 4.4 כשהאפליקציה משתמשת בספריות גדולות
         multiDexEnabled true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 
     buildTypes {
@@ -30,12 +30,9 @@ android {
 }
 
 dependencies {
-    // שנמוך גרסאות לגרסאות האחרונות שתמכו רשמית ב-API 19:
     implementation 'androidx.appcompat:appcompat:1.3.1'
     implementation 'com.google.android.material:material:1.4.0'
     implementation 'androidx.recyclerview:recyclerview:1.2.1'
     implementation 'com.google.code.gson:gson:2.10.1'
-    
-    // תוספת חובה עבור MultiDex באנדרואיד 4.4 ומטה
     implementation 'androidx.multidex:multidex:2.0.1'
 }
