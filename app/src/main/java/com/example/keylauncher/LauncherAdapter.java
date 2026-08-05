@@ -25,6 +25,13 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
         this.packageManager = context.getPackageManager();
     }
 
+    // מתודה חדשה לחיבור עדכון הרשימה מ-MainActivity
+    public void updateList(List<MainActivity.LauncherItem> newItems) {
+        this.items.clear();
+        this.items.addAll(newItems);
+        notifyDataSetChanged();
+    }
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -61,7 +68,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
                     try {
                         activityContext.startActivity(packageManager.getLaunchIntentForPackage(app.packageName));
                     } catch (Exception e) {
-                        // השגחה במקרה שאין אפשרות להפעיל
+                        // טיפול במקרה של שגיאה בהפעלה
                     }
                 }
             }
@@ -87,7 +94,7 @@ public class LauncherAdapter extends RecyclerView.Adapter<LauncherAdapter.ViewHo
                     return;
                 }
             } catch (Exception e) {
-                // נפילה לאייקון ברירת מחדל במקרה שגיאה
+                // נפילה לאייקון ברירת מחדל
             }
         }
         try {
