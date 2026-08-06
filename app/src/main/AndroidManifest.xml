@@ -6,7 +6,6 @@
     <uses-permission android:name="android.permission.BIND_APPWIDGET" />
 
     <application
-        android:name="androidx.multidex.MultiDexApplication"
         android:allowBackup="true"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="Key Launcher"

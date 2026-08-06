@@ -1,19 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
-        <item name="colorPrimary">#6200EE</item>
-        <item name="colorPrimaryDark">#3700B3</item>
-        <item name="colorAccent">#03DAC6</item>
-
-        <item name="popupMenuStyle">@style/MyPopupMenu</item>
+    <style name="AppTheme" parent="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+        <item name="android:popupMenuStyle">@style/MyPopupMenu</item>
+        <item name="android:itemTextAppearance">@style/MyPopupMenuTextAppearance</item>
     </style>
 
-    <style name="MyPopupMenu" parent="Widget.AppCompat.PopupMenu">
-        <item name="android:popupBackground">#9C27B0</item>
+    <style name="MyPopupMenu" parent="@android:style/Widget.PopupMenu">
+        <item name="android:popupBackground">#6200EE</item>
     </style>
 
-    <style name="MyPopupMenuTextAppearance" parent="TextAppearance.AppCompat">
+    <style name="MyPopupMenuTextAppearance" parent="@android:style/TextAppearance">
         <item name="android:textColor">#FFFFFF</item>
         <item name="android:textSize">16sp</item>
     </style>

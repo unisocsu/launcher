@@ -7,7 +7,7 @@
     android:padding="8dp"
     android:focusable="true"
     android:clickable="true"
-    android:background="?android:attr/selectableItemBackground">
+    android:background="@android:color/transparent">
 
     <RelativeLayout
         android:layout_width="wrap_content"
